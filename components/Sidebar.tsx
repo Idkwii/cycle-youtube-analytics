@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Folder, Channel } from '../types';
-import { Plus, Trash2, FolderPlus, Youtube, RefreshCw, Key, Folder as FolderIcon, GripVertical, ChevronRight, ChevronDown } from 'lucide-react';
+import { Plus, Trash2, FolderPlus, Youtube, RefreshCw, Key, Folder as FolderIcon, GripVertical, ChevronRight, ChevronDown, ChevronUp, Share2, CheckCircle2 } from 'lucide-react';
 
 interface SidebarProps {
   apiKey: string;
@@ -37,6 +37,9 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [newChannelInput, setNewChannelInput] = useState('');
   const [isAddingChannel, setIsAddingChannel] = useState(false);
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
+  
+  // API 설정 섹션 열림/닫힘 상태 (키가 없으면 기본적으로 열어둠)
+  const [isApiConfigOpen, setIsApiConfigOpen] = useState(!apiKey);
 
   const handleAddFolder = (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,6 +63,27 @@ const Sidebar: React.FC<SidebarProps> = ({
       await addChannel(newChannelInput.trim(), targetId || "");
       setIsAddingChannel(false);
       setNewChannelInput('');
+    }
+  };
+
+  const handleShareConfig = () => {
+    try {
+        const data = {
+            apiKey, // Include API Key in the share
+            channels,
+            folders
+        };
+        // Encode to JSON -> Base64 (Unicode Safe)
+        const jsonStr = JSON.stringify(data);
+        const b64 = window.btoa(unescape(encodeURIComponent(jsonStr)));
+        const url = `${window.location.origin}${window.location.pathname}?share=${b64}`;
+
+        navigator.clipboard.writeText(url).then(() => {
+            alert("✅ 설정 공유 링크가 복사되었습니다!\n\n이 링크에는 'API 키'가 포함되어 있습니다.\nGoogle Cloud Console에서 'HTTP 리퍼러 제한'을 꼭 설정해주세요.");
+        });
+    } catch (e) {
+        console.error("Share failed", e);
+        alert("링크 생성 중 오류가 발생했습니다.");
     }
   };
 
@@ -98,32 +122,71 @@ const Sidebar: React.FC<SidebarProps> = ({
           <h1 className="font-bold text-lg tracking-tight text-slate-900 leading-tight">Cycle Youtube<br/>Analytics</h1>
         </div>
         
-        {/* API Config Section */}
-        <div className="bg-slate-100 p-4 rounded-xl border border-slate-200 shadow-sm mb-4">
-          <label className="block text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
-            <Key size={16} className="text-slate-700" />
-            API 설정
-          </label>
-          <div className="space-y-3">
-             <input
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="YouTube API Key 입력"
-                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all bg-white text-slate-900 placeholder:text-slate-400"
-            />
-            <button
-                onClick={refreshData}
-                disabled={!apiKey}
-                className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors disabled:opacity-50 disabled:bg-slate-400"
-            >
-                <RefreshCw size={16} />
-                데이터 새로고침
-            </button>
-          </div>
+        {/* Primary Action: Refresh Data (Always visible) */}
+        <button
+            onClick={refreshData}
+            disabled={!apiKey}
+            className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-xl text-sm font-bold transition-all shadow-sm hover:shadow-md mb-4 disabled:opacity-50 disabled:bg-slate-400 disabled:cursor-not-allowed"
+        >
+            <RefreshCw size={18} />
+            데이터 새로고침
+        </button>
+
+        {/* API Config Section (Accordion Style) */}
+        <div className="bg-slate-100 rounded-xl border border-slate-200 shadow-sm mb-4 overflow-hidden transition-all">
+          {/* Header (Clickable) */}
+          <button 
+            onClick={() => setIsApiConfigOpen(!isApiConfigOpen)}
+            className="w-full p-4 flex items-center justify-between text-left hover:bg-slate-200/50 transition-colors"
+          >
+            <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                <Key size={16} className="text-slate-700" />
+                <span>API 설정</span>
+                {/* Status Indicator (Only visible when collapsed and key exists) */}
+                {!isApiConfigOpen && apiKey && (
+                    <span className="flex items-center gap-1 text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
+                        <CheckCircle2 size={10} />
+                        연결됨
+                    </span>
+                )}
+            </div>
+            {isApiConfigOpen ? <ChevronUp size={16} className="text-slate-500" /> : <ChevronDown size={16} className="text-slate-500" />}
+          </button>
+
+          {/* Collapsible Content */}
+          {isApiConfigOpen && (
+              <div className="px-4 pb-4 space-y-3 border-t border-slate-200 pt-3 animate-in slide-in-from-top-2 duration-200">
+                 <div className="relative">
+                     <input
+                        type="password"
+                        value={apiKey}
+                        onChange={(e) => setApiKey(e.target.value)}
+                        placeholder="YouTube API Key 입력"
+                        className="w-full pl-3 pr-10 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all bg-white text-slate-900 placeholder:text-slate-400"
+                    />
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                        {apiKey ? <CheckCircle2 size={16} className="text-green-500" /> : null}
+                    </div>
+                 </div>
+                
+                {/* Share Button (Config Action) */}
+                <button 
+                    onClick={handleShareConfig}
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg transition-colors font-medium text-xs"
+                >
+                    <Share2 size={14} />
+                    설정 및 API키 공유 링크 생성
+                </button>
+                
+                <p className="text-[10px] text-slate-400 leading-tight">
+                    * API 키는 브라우저에만 저장됩니다. <br/>
+                    * 공유 링크 생성 시 키가 포함되니 주의하세요.
+                </p>
+              </div>
+          )}
         </div>
 
-        {/* Add Channel Section (Simplified) */}
+        {/* Add Channel Section */}
         <div className="bg-slate-100 p-4 rounded-xl border border-slate-200 shadow-sm">
             <h2 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
                 <Plus size={16} className="text-slate-700" />
