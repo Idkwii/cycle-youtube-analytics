@@ -4,42 +4,46 @@ import Dashboard from './components/Dashboard';
 import { AppState, Channel, Folder, Video } from './types';
 import { fetchChannelInfo, fetchRecentVideos } from './services/youtubeService';
 
-const DEFAULT_FOLDERS: Folder[] = [];
+const STORAGE_KEY = 'yt_dashboard_state';
+
+// Helper to safely load initial state from localStorage
+// 앱 시작 시 빈 값이 아니라 저장된 값을 바로 가져오기 위한 함수입니다.
+const loadInitialState = <T,>(key: keyof AppState, defaultValue: T): T => {
+  try {
+    const storedState = localStorage.getItem(STORAGE_KEY);
+    if (storedState) {
+      const parsed = JSON.parse(storedState);
+      return parsed[key] !== undefined ? parsed[key] : defaultValue;
+    }
+  } catch (e) {
+    console.error("Failed to load state", e);
+  }
+  return defaultValue;
+};
 
 const App: React.FC = () => {
-  // --- State ---
-  const [apiKey, setApiKey] = useState<string>('');
-  const [channels, setChannels] = useState<Channel[]>([]);
-  const [folders, setFolders] = useState<Folder[]>(DEFAULT_FOLDERS);
+  // --- State (with Lazy Initialization) ---
+  // useState(() => ...) 패턴을 사용하여 컴포넌트가 처음 렌더링되기 전에 값을 불러옵니다.
+  // 이렇게 해야 useEffect 실행 순서 문제로 인해 저장된 데이터가 빈 값으로 덮어쓰여지는 것을 방지할 수 있습니다.
+  
+  const [apiKey, setApiKey] = useState<string>(() => loadInitialState('apiKey', ''));
+  const [channels, setChannels] = useState<Channel[]>(() => loadInitialState('channels', []));
+  const [folders, setFolders] = useState<Folder[]>(() => loadInitialState('folders', []));
+  
   const [videos, setVideos] = useState<Video[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
 
-  // --- Persistence ---
-  useEffect(() => {
-    const storedState = localStorage.getItem('yt_dashboard_state');
-    if (storedState) {
-      try {
-        const parsed: Partial<AppState> = JSON.parse(storedState);
-        if (parsed.apiKey) setApiKey(parsed.apiKey);
-        if (parsed.channels) setChannels(parsed.channels);
-        if (parsed.folders) setFolders(parsed.folders);
-        // We don't restore videos generally to force fresh fetch, but for specific UX we might.
-        // Let's keep it fresh or maybe cache for short time. For now, empty videos on reload is safer to avoid stale data.
-      } catch (e) {
-        console.error("Failed to load state", e);
-      }
-    }
-  }, []);
-
+  // --- Persistence (Save only) ---
+  // 상태가 변경될 때마다 localStorage에 저장합니다.
   useEffect(() => {
     const stateToSave: Partial<AppState> = {
       apiKey,
       channels,
       folders,
     };
-    localStorage.setItem('yt_dashboard_state', JSON.stringify(stateToSave));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
   }, [apiKey, channels, folders]);
 
 
