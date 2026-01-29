@@ -20,15 +20,15 @@ const handleApiError = async (response: Response) => {
     const message = errorData.error?.message || `API 호출 실패 (Status: ${response.status})`;
     
     if (response.status === 403) {
-      if (message.includes('referer')) {
-        throw new Error(`[도메인 차단] Google Cloud Console에서 현재 도메인(pages.dev)을 API 키 허용 목록에 추가해야 합니다.`);
+      if (message.includes('quota') || message.includes('limit')) {
+        throw new Error(`[할당량 초과] YouTube API 일일 사용량을 모두 소진했습니다. 내일 다시 시도하거나 다른 API 키를 사용해주세요.`);
       }
-      throw new Error(`[API 키/할당량 오류] ${message}`);
-    } else if (response.status === 400) {
-      throw new Error(`[잘못된 요청] ${message}`);
-    } else {
-      throw new Error(message);
+      if (message.includes('referer')) {
+        throw new Error(`[도메인 차단] Google Cloud Console에서 현재 도메인을 허용 목록에 추가해야 합니다.`);
+      }
+      throw new Error(`[접근 거부] ${message}`);
     }
+    throw new Error(message);
   }
 };
 
@@ -69,6 +69,7 @@ export const fetchChannelInfo = async (identifier: string, apiKey: string): Prom
   };
 
   const searchByName = async (name: string) => {
+    // Search API는 100포인트를 소모하므로 주의 필요
     const url = `${BASE_URL}/search?part=snippet&type=channel&q=${encodeURIComponent(name)}&maxResults=1&key=${apiKey}`;
     const res = await fetch(url);
     await handleApiError(res);
@@ -85,61 +86,77 @@ export const fetchChannelInfo = async (identifier: string, apiKey: string): Prom
 export const fetchRecentVideos = async (channels: Channel[], apiKey: string, days: number = 30): Promise<Video[]> => {
   if (channels.length === 0) return [];
 
-  const allVideos: Video[] = [];
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - days);
 
-  const channelPromises = channels.map(async (channel) => {
+  // 1단계: 모든 채널에서 최근 영상 ID 수집 (채널당 1포인트 소모)
+  const videoToChannelMap: Record<string, { channelId: string, channelTitle: string }> = {};
+  const allVideoIds: string[] = [];
+
+  const playlistPromises = channels.map(async (channel) => {
     try {
-      // 기간이 길어질수록 더 많은 영상을 확인해야 함 (30일 선택시 maxResults 증가)
       const maxResults = days > 7 ? 50 : 20;
-      const plUrl = `${BASE_URL}/playlistItems?part=snippet,contentDetails&playlistId=${channel.uploadsPlaylistId}&maxResults=${maxResults}&key=${apiKey}`;
-      const plRes = await fetch(plUrl);
-      if (!plRes.ok) return [];
+      const url = `${BASE_URL}/playlistItems?part=snippet,contentDetails&playlistId=${channel.uploadsPlaylistId}&maxResults=${maxResults}&key=${apiKey}`;
+      const res = await fetch(url);
+      if (!res.ok) {
+          // 개별 채널 오류 시 해당 채널만 건너뜀
+          return;
+      }
+      const data = await res.json();
+      if (!data.items) return;
 
-      const plData = await plRes.json();
-      if (!plData.items) return [];
-
-      const videoIds: string[] = [];
-      for (const item of plData.items) {
+      for (const item of data.items) {
         const publishedAt = new Date(item.snippet.publishedAt);
         if (publishedAt >= cutoffDate) {
-          videoIds.push(item.contentDetails.videoId);
+          const vId = item.contentDetails.videoId;
+          allVideoIds.push(vId);
+          videoToChannelMap[vId] = { channelId: channel.id, channelTitle: channel.title };
         }
       }
-
-      if (videoIds.length === 0) return [];
-
-      const vUrl = `${BASE_URL}/videos?part=snippet,statistics,contentDetails&id=${videoIds.join(',')}&key=${apiKey}`;
-      const vRes = await fetch(vUrl);
-      if (!vRes.ok) return [];
-
-      const vData = await vRes.json();
-      if (!vData.items) return [];
-
-      return vData.items.map((item: any) => {
-        const durationSec = parseDuration(item.contentDetails.duration);
-        return {
-          id: item.id,
-          channelId: channel.id,
-          channelTitle: channel.title,
-          title: item.snippet.title,
-          thumbnail: item.snippet.thumbnails.medium?.url || item.snippet.thumbnails.default?.url,
-          publishedAt: item.snippet.publishedAt,
-          viewCount: parseInt(item.statistics.viewCount || '0'),
-          likeCount: parseInt(item.statistics.likeCount || '0'),
-          commentCount: parseInt(item.statistics.commentCount || '0'),
-          duration: item.contentDetails.duration,
-          isShort: durationSec <= 180,
-        };
-      });
-    } catch (error) {
-      console.error(`Error for ${channel.title}:`, error);
-      return [];
+    } catch (e) {
+      console.warn(`Failed to fetch playlist for ${channel.title}`, e);
     }
   });
 
-  const results = await Promise.all(channelPromises);
-  results.forEach(videos => allVideos.push(...videos));
-  return allVideos;
+  await Promise.all(playlistPromises);
+
+  if (allVideoIds.length === 0) return [];
+
+  // 2단계: 수집된 ID들을 50개씩 묶어서 상세 정보 조회 (묶음당 1포인트 소모 - 매우 효율적)
+  const finalVideos: Video[] = [];
+  const chunkSize = 50;
+  
+  for (let i = 0; i < allVideoIds.length; i += chunkSize) {
+    const chunk = allVideoIds.slice(i, i + chunkSize);
+    try {
+      const url = `${BASE_URL}/videos?part=snippet,statistics,contentDetails&id=${chunk.join(',')}&key=${apiKey}`;
+      const res = await fetch(url);
+      await handleApiError(res);
+      const data = await res.json();
+
+      if (data.items) {
+        data.items.forEach((item: any) => {
+          const durationSec = parseDuration(item.contentDetails.duration);
+          const channelInfo = videoToChannelMap[item.id];
+          finalVideos.push({
+            id: item.id,
+            channelId: channelInfo?.channelId || item.snippet.channelId,
+            channelTitle: channelInfo?.channelTitle || item.snippet.channelTitle,
+            title: item.snippet.title,
+            thumbnail: item.snippet.thumbnails.medium?.url || item.snippet.thumbnails.default?.url,
+            publishedAt: item.snippet.publishedAt,
+            viewCount: parseInt(item.statistics.viewCount || '0'),
+            likeCount: parseInt(item.statistics.likeCount || '0'),
+            commentCount: parseInt(item.statistics.commentCount || '0'),
+            duration: item.contentDetails.duration,
+            isShort: durationSec <= 180,
+          });
+        });
+      }
+    } catch (e) {
+      console.error("Failed to fetch video details chunk", e);
+    }
+  }
+
+  return finalVideos;
 };

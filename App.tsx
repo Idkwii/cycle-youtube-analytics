@@ -79,35 +79,31 @@ const App: React.FC = () => {
 
 
   const refreshData = useCallback(async (customPeriod?: AnalysisPeriod) => {
-    if (!apiKey || channels.length === 0) return;
+    if (!apiKey) {
+        alert("API 키가 설정되지 않았습니다.");
+        return;
+    }
+    if (channels.length === 0) return;
     
     setIsLoading(true);
     try {
+      console.log(`Fetching data for ${channels.length} channels for last ${customPeriod || period} days...`);
       const newVideos = await fetchRecentVideos(channels, apiKey, customPeriod || period);
       setVideos(newVideos);
+      console.log(`Successfully loaded ${newVideos.length} videos.`);
     } catch (error: any) {
-      alert(`데이터 로드 실패: ${error.message}`);
-      console.error(error);
+      alert(`데이터 로드 중 오류 발생:\n${error.message}`);
+      console.error("Refresh Data Error:", error);
     } finally {
       setIsLoading(false);
     }
   }, [apiKey, channels, period]);
 
-  // 기간이 변경될 때 자동으로 새로고침
   useEffect(() => {
     if (apiKey && channels.length > 0) {
         refreshData();
     }
-  }, [period, apiKey]);
-
-  useEffect(() => {
-      if (sharedData && apiKey && channels.length > 0) {
-          const timer = setTimeout(() => {
-              refreshData();
-          }, 500);
-          return () => clearTimeout(timer);
-      }
-  }, []);
+  }, [period, apiKey, channels.length]); // channels.length 추가하여 채널 추가 시 자동 로드 유도
 
   const addFolder = (name: string) => {
     const newFolder: Folder = {
@@ -124,6 +120,7 @@ const App: React.FC = () => {
     }
     
     try {
+      setIsLoading(true);
       const info = await fetchChannelInfo(identifier, apiKey);
       
       if (channels.some(c => c.id === info.id)) {
@@ -151,19 +148,20 @@ const App: React.FC = () => {
         folderId: targetFolderId,
       };
       
-      const updatedChannels = [...channels, newChannel];
-      setChannels(updatedChannels);
+      setChannels(prev => [...prev, newChannel]);
       
       if (!selectedFolderId) {
           setSelectedFolderId(targetFolderId);
       }
       
-      const newVideos = await fetchRecentVideos([newChannel], apiKey, period);
-      setVideos(prev => [...prev, ...newVideos]);
+      // 채널 하나 추가 시 전체 새로고침 대신 효율적 추가 (단, 복잡성을 위해 전체 새로고침 트리거)
+      // useEffect의 channels.length 의존성에 의해 자동 실행됨
 
     } catch (error: any) {
       console.error(error);
-      alert(`채널 추가 실패: ${error.message}\n\n도움말: 핸들은 @를 포함해 입력(예: @YouTube)하거나, 검색어를 정확히 입력해주세요.`);
+      alert(`채널 추가 실패: ${error.message}`);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -219,18 +217,13 @@ const App: React.FC = () => {
                     </div>
                     <h2 className="text-2xl font-bold text-slate-900 mb-4">API 키가 설정되지 않았습니다</h2>
                     <p className="text-slate-600 mb-8 leading-relaxed">
-                        YouTube 데이터를 불러오기 위해 Google Cloud Console에서 발급받은 <br/>
+                        YouTube 데이터를 불러오기 위해 발급받은 <br/>
                         <strong>YouTube Data API v3</strong> 키가 필요합니다. <br/>
                         사이드바의 '설정 및 API' 메뉴에 키를 입력해주세요.
                     </p>
-                    <div className="flex flex-col gap-2 text-left bg-slate-50 p-4 rounded-xl text-xs text-slate-500 border border-slate-200">
-                        <p>• API 키를 이미 입력했는데도 이 메시지가 보인다면 페이지를 새로고침 해주세요.</p>
-                        <p>• 공유 링크로 접속했다면 보낸 사람이 API 키를 포함했는지 확인해주세요.</p>
-                    </div>
                 </div>
             </div>
         )}
-       
       </main>
     </div>
   );
