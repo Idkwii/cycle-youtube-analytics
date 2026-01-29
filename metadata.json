@@ -1,0 +1,5 @@
+{
+  "name": "Cycle Youtube Analytics",
+  "description": "유튜브 채널 성과를 분석하고, 폴더별로 관리하며, 롱폼/숏폼 필터링을 제공하는 대시보드입니다.",
+  "requestFramePermissions": []
+}
