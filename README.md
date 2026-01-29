@@ -1,20 +1,24 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Cycle Youtube Analytics (React Version)
 
-# Run and deploy your AI Studio app
+YouTube Data API를 사용하여 채널 성과를 분석하는 **React** 웹 애플리케이션입니다.
+Netlify와 같은 정적 호스팅 서비스에 배포할 수 있습니다.
 
-This contains everything you need to run your app locally.
+## 🚀 배포 방법 (Netlify)
 
-View your app in AI Studio: https://ai.studio/apps/drive/1gROKPeg-E8NJJXnHu0Z-DhXiDYoDOP2q
+1. **GitHub에 코드 푸시**: 이 코드를 GitHub 저장소에 올립니다.
+2. **Netlify 접속**: [Netlify](https://www.netlify.com/)에 로그인하고 **"Add new site"** -> **"Import an existing project"**를 클릭합니다.
+3. **GitHub 연결**: 저장소를 선택합니다.
+4. **빌드 설정 확인**:
+   - **Build command**: `npm run build`
+   - **Publish directory**: `dist`
+5. **Deploy**: 배포 버튼을 누르면 몇 분 뒤 사이트가 생성됩니다.
 
-## Run Locally
+## 🛠 로컬 실행 방법
 
-**Prerequisites:**  Node.js
+```bash
+# 의존성 설치
+npm install
 
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+# 개발 서버 실행
+npm run dev
+```
