@@ -8,30 +8,36 @@ interface DashboardProps {
   videos: Video[];
   channels: Channel[];
   selectedFolderId: string | null;
+  selectedChannelId: string | null;
   folders: Folder[];
   isLoading: boolean;
   refreshData: () => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ videos, channels, selectedFolderId, folders, isLoading, refreshData }) => {
+const Dashboard: React.FC<DashboardProps> = ({ videos, channels, selectedFolderId, selectedChannelId, folders, isLoading, refreshData }) => {
   const [videoTypeFilter, setVideoTypeFilter] = useState<VideoTypeFilter>('ALL');
   const [sortOption, setSortOption] = useState<SortOption>(SortOption.VIEWS_DESC);
 
-  // 1. Filter by Folder
-  const folderVideos = useMemo(() => {
-    if (!selectedFolderId) return videos;
-    const folderChannelIds = channels.filter(c => c.folderId === selectedFolderId).map(c => c.id);
-    return videos.filter(v => folderChannelIds.includes(v.channelId));
-  }, [videos, selectedFolderId, channels]);
+  // 1. Filter by Scope (Channel > Folder > All)
+  const scopeVideos = useMemo(() => {
+    if (selectedChannelId) {
+        return videos.filter(v => v.channelId === selectedChannelId);
+    }
+    if (selectedFolderId) {
+        const folderChannelIds = channels.filter(c => c.folderId === selectedFolderId).map(c => c.id);
+        return videos.filter(v => folderChannelIds.includes(v.channelId));
+    }
+    return videos;
+  }, [videos, selectedFolderId, selectedChannelId, channels]);
 
   // 2. Filter by Type (Short/Long)
   const filteredVideos = useMemo(() => {
-    return folderVideos.filter(v => {
+    return scopeVideos.filter(v => {
       if (videoTypeFilter === 'LONG') return !v.isShort;
       if (videoTypeFilter === 'SHORT') return v.isShort;
       return true;
     });
-  }, [folderVideos, videoTypeFilter]);
+  }, [scopeVideos, videoTypeFilter]);
 
   // Stats
   const stats = useMemo(() => {
@@ -73,14 +79,21 @@ const Dashboard: React.FC<DashboardProps> = ({ videos, channels, selectedFolderI
     </div>
   );
 
-  const selectedFolderName = folders.find(f => f.id === selectedFolderId)?.name || "전체 채널";
+  let viewTitle = "전체 채널";
+  if (selectedChannelId) {
+      const ch = channels.find(c => c.id === selectedChannelId);
+      if (ch) viewTitle = ch.title;
+  } else if (selectedFolderId) {
+      const f = folders.find(f => f.id === selectedFolderId);
+      if (f) viewTitle = f.name;
+  }
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">{selectedFolderName} 성과 분석</h1>
+          <h1 className="text-2xl font-bold text-slate-900">{viewTitle} 성과 분석</h1>
           <p className="text-slate-500 text-sm mt-1">최근 7일 데이터 분석</p>
         </div>
         
@@ -130,7 +143,7 @@ const Dashboard: React.FC<DashboardProps> = ({ videos, channels, selectedFolderI
       </div>
 
       {/* Chart Section */}
-      {filteredVideos.length > 0 && (
+      {filteredVideos.length > 0 && !selectedChannelId && (
          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <h3 className="font-semibold text-slate-800 mb-6">조회수 TOP 5 채널</h3>
             <div className="h-64 w-full">

@@ -4,11 +4,7 @@ import Dashboard from './components/Dashboard';
 import { AppState, Channel, Folder, Video } from './types';
 import { fetchChannelInfo, fetchRecentVideos } from './services/youtubeService';
 
-const DEFAULT_FOLDERS: Folder[] = [
-  { id: 'f1', name: '경쟁사' },
-  { id: 'f2', name: '레퍼런스' },
-  { id: 'f3', name: '파트너' },
-];
+const DEFAULT_FOLDERS: Folder[] = [];
 
 const App: React.FC = () => {
   // --- State ---
@@ -18,6 +14,7 @@ const App: React.FC = () => {
   const [videos, setVideos] = useState<Video[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
 
   // --- Persistence ---
   useEffect(() => {
@@ -91,13 +88,36 @@ const App: React.FC = () => {
         return;
       }
 
+      // Handle Folder Assignment
+      let targetFolderId = folderId;
+      let currentFolders = [...folders];
+
+      // If no folder ID is provided (or empty), handle auto-creation or default assignment
+      if (!targetFolderId) {
+          if (currentFolders.length === 0) {
+              const newFolderId = `f-${Date.now()}`;
+              const newFolder = { id: newFolderId, name: '기본 폴더' };
+              currentFolders = [newFolder];
+              setFolders(currentFolders); // Update state
+              targetFolderId = newFolderId;
+          } else {
+              targetFolderId = currentFolders[0].id;
+          }
+      }
+
       const newChannel: Channel = {
         ...info,
-        folderId,
+        folderId: targetFolderId,
       };
       
       const updatedChannels = [...channels, newChannel];
       setChannels(updatedChannels);
+      
+      // Auto-select the folder if none was selected, so the user sees the new channel
+      if (!selectedFolderId) {
+          setSelectedFolderId(targetFolderId);
+          setSelectedChannelId(null);
+      }
       
       // Fetch videos for this new channel immediately
       const newVideos = await fetchRecentVideos([newChannel], apiKey);
@@ -112,6 +132,13 @@ const App: React.FC = () => {
   const deleteChannel = (id: string) => {
     setChannels(channels.filter(c => c.id !== id));
     setVideos(videos.filter(v => v.channelId !== id));
+    if (selectedChannelId === id) setSelectedChannelId(null);
+  };
+
+  const moveChannel = (channelId: string, targetFolderId: string) => {
+    setChannels(prev => prev.map(c => 
+      c.id === channelId ? { ...c, folderId: targetFolderId } : c
+    ));
   };
 
   return (
@@ -122,10 +149,16 @@ const App: React.FC = () => {
         folders={folders}
         channels={channels}
         selectedFolderId={selectedFolderId}
-        setSelectedFolderId={setSelectedFolderId}
+        setSelectedFolderId={(id) => {
+            setSelectedFolderId(id);
+            setSelectedChannelId(null); // Reset channel selection when folder changes
+        }}
+        selectedChannelId={selectedChannelId}
+        setSelectedChannelId={setSelectedChannelId}
         addFolder={addFolder}
         addChannel={addChannel}
         deleteChannel={deleteChannel}
+        moveChannel={moveChannel}
         refreshData={refreshData}
       />
       <main className="flex-1 ml-80 overflow-y-auto">
@@ -134,6 +167,7 @@ const App: React.FC = () => {
                 videos={videos}
                 channels={channels}
                 selectedFolderId={selectedFolderId}
+                selectedChannelId={selectedChannelId}
                 folders={folders}
                 isLoading={isLoading}
                 refreshData={refreshData}

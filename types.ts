@@ -39,7 +39,11 @@ export interface AppState {
 
 export enum SortOption {
   VIEWS_DESC = 'VIEWS_DESC',
+  VIEWS_ASC = 'VIEWS_ASC',
   LIKES_DESC = 'LIKES_DESC',
+  LIKES_ASC = 'LIKES_ASC',
   COMMENTS_DESC = 'COMMENTS_DESC',
-  DATE_DESC = 'DATE_DESC'
+  COMMENTS_ASC = 'COMMENTS_ASC',
+  DATE_DESC = 'DATE_DESC',
+  DATE_ASC = 'DATE_ASC'
 }

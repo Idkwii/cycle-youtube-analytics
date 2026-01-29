@@ -1,6 +1,6 @@
 import React from 'react';
 import { Video, SortOption } from '../types';
-import { ExternalLink, ThumbsUp, MessageCircle, Eye } from 'lucide-react';
+import { ExternalLink, ThumbsUp, MessageCircle, ArrowUp, ArrowDown } from 'lucide-react';
 
 interface VideoTableProps {
   videos: Video[];
@@ -12,30 +12,51 @@ const VideoTable: React.FC<VideoTableProps> = ({ videos, sortOption, setSortOpti
 
   const sortedVideos = [...videos].sort((a, b) => {
     switch (sortOption) {
-      case SortOption.VIEWS_DESC:
-        return b.viewCount - a.viewCount;
-      case SortOption.LIKES_DESC:
-        return b.likeCount - a.likeCount;
-      case SortOption.COMMENTS_DESC:
-        return b.commentCount - a.commentCount;
-      case SortOption.DATE_DESC:
-        return new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime();
-      default:
-        return 0;
+      case SortOption.VIEWS_DESC: return b.viewCount - a.viewCount;
+      case SortOption.VIEWS_ASC: return a.viewCount - b.viewCount;
+      case SortOption.LIKES_DESC: return b.likeCount - a.likeCount;
+      case SortOption.LIKES_ASC: return a.likeCount - b.likeCount;
+      case SortOption.COMMENTS_DESC: return b.commentCount - a.commentCount;
+      case SortOption.COMMENTS_ASC: return a.commentCount - b.commentCount;
+      case SortOption.DATE_DESC: return new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime();
+      case SortOption.DATE_ASC: return new Date(a.publishedAt).getTime() - new Date(b.publishedAt).getTime();
+      default: return 0;
     }
   });
 
-  const SortButton = ({ label, option }: { label: string; option: SortOption }) => (
-    <button
-      onClick={() => setSortOption(option)}
-      className={`flex items-center space-x-1 text-xs font-semibold uppercase tracking-wider ${
-        sortOption === option ? 'text-blue-600' : 'text-slate-500 hover:text-slate-700'
-      }`}
-    >
-      <span>{label}</span>
-      {sortOption === option && <div className="w-1 h-1 rounded-full bg-blue-600" />}
-    </button>
-  );
+  const handleSortClick = (category: 'VIEWS' | 'LIKES' | 'COMMENTS' | 'DATE') => {
+    // Define the pairs
+    const desc = SortOption[`${category}_DESC` as keyof typeof SortOption];
+    const asc = SortOption[`${category}_ASC` as keyof typeof SortOption];
+
+    // Toggle: If currently DESC, switch to ASC. Otherwise (including if different category), switch to DESC.
+    // However, usually if different category, we want DESC first. 
+    // If currently ASC, switch to DESC.
+    if (sortOption === desc) {
+        setSortOption(asc);
+    } else {
+        setSortOption(desc);
+    }
+  };
+
+  const SortButton = ({ label, category }: { label: string; category: 'VIEWS' | 'LIKES' | 'COMMENTS' | 'DATE' }) => {
+    const isSelected = sortOption.includes(category);
+    const isAsc = sortOption.includes('ASC');
+
+    return (
+      <button
+        onClick={() => handleSortClick(category)}
+        className={`flex items-center space-x-1 text-xs font-semibold uppercase tracking-wider transition-colors ${
+          isSelected ? 'text-blue-600' : 'text-slate-500 hover:text-slate-700'
+        }`}
+      >
+        <span>{label}</span>
+        {isSelected && (
+           isAsc ? <ArrowUp size={12} strokeWidth={3} /> : <ArrowDown size={12} strokeWidth={3} />
+        )}
+      </button>
+    );
+  };
 
   if (videos.length === 0) {
     return (
@@ -50,10 +71,10 @@ const VideoTable: React.FC<VideoTableProps> = ({ videos, sortOption, setSortOpti
       <div className="p-4 border-b border-slate-100 bg-slate-50 flex flex-wrap gap-4 items-center justify-between">
         <h3 className="font-semibold text-slate-800">최근 업로드 영상</h3>
         <div className="flex gap-4">
-            <SortButton label="조회수" option={SortOption.VIEWS_DESC} />
-            <SortButton label="좋아요" option={SortOption.LIKES_DESC} />
-            <SortButton label="댓글" option={SortOption.COMMENTS_DESC} />
-            <SortButton label="날짜" option={SortOption.DATE_DESC} />
+            <SortButton label="조회수" category="VIEWS" />
+            <SortButton label="좋아요" category="LIKES" />
+            <SortButton label="댓글" category="COMMENTS" />
+            <SortButton label="날짜" category="DATE" />
         </div>
       </div>
       <div className="overflow-x-auto">
