@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Folder, Channel } from '../types';
-import { Plus, Trash2, FolderPlus, Youtube, RefreshCw, Key, Folder as FolderIcon, GripVertical, ChevronRight, ChevronDown, ChevronUp, Share2, CheckCircle2 } from 'lucide-react';
+import { Plus, Trash2, FolderPlus, Youtube, RefreshCw, Key, Folder as FolderIcon, GripVertical, ChevronRight, ChevronDown, ChevronUp, Share2, CheckCircle2, BarChart3, ExternalLink } from 'lucide-react';
 
 interface SidebarProps {
   apiKey: string;
@@ -161,17 +161,29 @@ const Sidebar: React.FC<SidebarProps> = ({
                     </div>
                  </div>
                 
-                {/* 팀원 공유 버튼을 설정 섹션 내부에 배치 */}
-                <button 
-                    onClick={handleShareConfig}
-                    className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg transition-colors font-bold text-xs shadow-sm"
-                >
-                    <Share2 size={14} />
-                    팀원에게 설정 공유하기
-                </button>
+                <div className="grid grid-cols-2 gap-2">
+                    <button 
+                        onClick={handleShareConfig}
+                        className="flex items-center justify-center gap-2 px-2 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg transition-colors font-bold text-[10px] shadow-sm"
+                    >
+                        <Share2 size={12} />
+                        설정 공유
+                    </button>
+                    
+                    <a 
+                        href="https://console.cloud.google.com/apis/enabled/youtube.googleapis.com/quotas"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center gap-2 px-2 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg transition-colors font-bold text-[10px] shadow-sm"
+                    >
+                        <BarChart3 size={12} />
+                        할당량 확인
+                        <ExternalLink size={10} className="opacity-50" />
+                    </a>
+                </div>
                 
                 <p className="text-[10px] text-slate-500 leading-tight text-center">
-                    현재 채널 리스트와 API 키가 포함된 링크를 복사합니다.
+                    일일 할당량은 한국시간 오후 4~5시경 초기화됩니다.
                 </p>
               </div>
           )}
