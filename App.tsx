@@ -56,6 +56,12 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved).timestamp || null : null;
   });
 
+  // 현재 캐시된 데이터가 어떤 기간(7일/30일) 기준인지 추적
+  const [dataPeriod, setDataPeriod] = useState<AnalysisPeriod | null>(() => {
+    const saved = localStorage.getItem(VIDEO_CACHE_KEY);
+    return saved ? JSON.parse(saved).period || null : null;
+  });
+
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
@@ -65,20 +71,25 @@ const App: React.FC = () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ apiKey, channels, folders, period }));
   }, [apiKey, channels, folders, period]);
 
-  // 영상 데이터 캐시 저장
+  // 영상 데이터 캐시 저장 (데이터 기간 정보 포함)
   useEffect(() => {
     if (videos.length > 0) {
-        localStorage.setItem(VIDEO_CACHE_KEY, JSON.stringify({ data: videos, timestamp: lastFetched }));
+        localStorage.setItem(VIDEO_CACHE_KEY, JSON.stringify({ 
+            data: videos, 
+            timestamp: lastFetched,
+            period: dataPeriod 
+        }));
     }
-  }, [videos, lastFetched]);
+  }, [videos, lastFetched, dataPeriod]);
 
   const refreshData = useCallback(async (customPeriod?: AnalysisPeriod, force = false) => {
     if (!apiKey) return;
     if (channels.length === 0) return;
 
-    // 강제 새로고침이 아니고, 최근 30분 이내에 불러온 적이 있다면 생략 (할당량 보호)
+    // 강제 새로고침이 아니고, 기간이 동일하며, 최근 30분 이내에 불러온 적이 있다면 생략 (할당량 보호)
     const now = Date.now();
-    if (!force && lastFetched && (now - lastFetched < 30 * 60 * 1000) && !customPeriod) {
+    // customPeriod가 있다는 것은 기간이 변경되어 호출되었다는 의미이므로 체크 통과
+    if (!force && !customPeriod && lastFetched && (now - lastFetched < 30 * 60 * 1000)) {
         console.log("Using cached data (fetched less than 30 mins ago)");
         return;
     }
@@ -88,6 +99,7 @@ const App: React.FC = () => {
       const targetPeriod = customPeriod || period;
       const newVideos = await fetchRecentVideos(channels, apiKey, targetPeriod);
       setVideos(newVideos);
+      setDataPeriod(targetPeriod);
       setLastFetched(Date.now());
     } catch (error: any) {
       alert(error.message);
@@ -100,13 +112,18 @@ const App: React.FC = () => {
   // 앱 시작 시 또는 기간 변경 시 데이터 로드
   useEffect(() => {
     if (apiKey && channels.length > 0) {
-        // 이미 영상이 있고 마지막 업데이트가 1시간 이내라면 자동 새로고침 안함
-        const shouldAutoRefresh = !lastFetched || (Date.now() - lastFetched > 60 * 60 * 1000);
-        if (shouldAutoRefresh) {
-            refreshData();
+        // 현재 선택된 기간과 데이터의 기간이 다르면 강제로 리프레시 (캐시 시간 무시)
+        if (dataPeriod !== period) {
+            refreshData(period);
+        } else {
+            // 기간이 같다면 시간 경과 체크
+            const shouldAutoRefresh = !lastFetched || (Date.now() - lastFetched > 60 * 60 * 1000);
+            if (shouldAutoRefresh) {
+                refreshData();
+            }
         }
     }
-  }, [period]);
+  }, [period]); // apiKey나 channels가 바뀔 때는 다른 로직이 처리하거나 수동 리프레시 권장
 
   const addFolder = (name: string) => {
     setFolders([...folders, { id: `f-${Date.now()}`, name }]);
@@ -133,7 +150,7 @@ const App: React.FC = () => {
       const newChannel = { ...info, folderId: targetId };
       setChannels(prev => [...prev, newChannel]);
       
-      // 새 채널 추가 시에는 즉시 데이터 한 번 가져오기
+      // 새 채널 추가 시에는 즉시 데이터 한 번 가져오기 (현재 기간 기준)
       const newV = await fetchRecentVideos([newChannel], apiKey, period);
       setVideos(prev => [...prev, ...newV]);
     } catch (error: any) {
