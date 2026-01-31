@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Video, VideoTypeFilter, SortOption, Folder, Channel, AnalysisPeriod } from '../types';
+import { Video, SortOption, Folder, Channel, AnalysisPeriod } from '../types';
 import VideoTable from './VideoTable';
 import { Eye, ThumbsUp, MessageCircle, Film } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
@@ -25,7 +25,6 @@ const Dashboard: React.FC<DashboardProps> = ({
     period,
     setPeriod
 }) => {
-  const [videoTypeFilter, setVideoTypeFilter] = useState<VideoTypeFilter>('ALL');
   const [sortOption, setSortOption] = useState<SortOption>(SortOption.VIEWS_DESC);
 
   const scopeVideos = useMemo(() => {
@@ -40,19 +39,25 @@ const Dashboard: React.FC<DashboardProps> = ({
   }, [videos, selectedFolderId, selectedChannelId, channels]);
 
   const filteredVideos = useMemo(() => {
-    return scopeVideos.filter(v => {
-      if (videoTypeFilter === 'LONG') return !v.isShort;
-      if (videoTypeFilter === 'SHORT') return v.isShort;
-      return true;
-    });
-  }, [scopeVideos, videoTypeFilter]);
+    // 숏폼을 완전히 제외하고 롱폼(일반 영상)만 필터링
+    return scopeVideos.filter(v => !v.isShort);
+  }, [scopeVideos]);
 
   const stats = useMemo(() => {
+    const count = filteredVideos.length;
+    if (count === 0) {
+        return { count: 0, avgViews: 0, avgLikes: 0, avgComments: 0 };
+    }
+
+    const totalViews = filteredVideos.reduce((acc, v) => acc + v.viewCount, 0);
+    const totalLikes = filteredVideos.reduce((acc, v) => acc + v.likeCount, 0);
+    const totalComments = filteredVideos.reduce((acc, v) => acc + v.commentCount, 0);
+
     return {
-      count: filteredVideos.length,
-      views: filteredVideos.reduce((acc, v) => acc + v.viewCount, 0),
-      likes: filteredVideos.reduce((acc, v) => acc + v.likeCount, 0),
-      comments: filteredVideos.reduce((acc, v) => acc + v.commentCount, 0),
+      count,
+      avgViews: Math.round(totalViews / count),
+      avgLikes: Math.round(totalLikes / count),
+      avgComments: Math.round(totalComments / count),
     };
   }, [filteredVideos]);
 
@@ -97,7 +102,7 @@ const Dashboard: React.FC<DashboardProps> = ({
         <div className="flex items-center gap-4">
             <div>
                 <h1 className="text-2xl font-bold text-slate-900">{viewTitle} 성과 분석</h1>
-                <p className="text-slate-500 text-sm mt-1">최근 {period}일 데이터 분석 중</p>
+                <p className="text-slate-500 text-sm mt-1">최근 {period}일 데이터 분석 중 (숏폼 제외)</p>
             </div>
             {/* 기간 선택 토글 */}
             <div className="flex items-center bg-slate-200 p-1 rounded-lg ml-2">
@@ -115,26 +120,14 @@ const Dashboard: React.FC<DashboardProps> = ({
             </div>
         </div>
         
-        <div className="flex items-center bg-slate-200 p-1 rounded-lg">
-          {(['ALL', 'LONG', 'SHORT'] as VideoTypeFilter[]).map((type) => (
-            <button
-              key={type}
-              onClick={() => setVideoTypeFilter(type)}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
-                videoTypeFilter === type ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              {type === 'ALL' ? '전체' : type === 'LONG' ? '롱폼' : '숏폼'}
-            </button>
-          ))}
-        </div>
+        {/* 숏폼 필터 버튼 제거됨 */}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="영상 수" value={stats.count.toLocaleString()} icon={Film} color="bg-slate-600 text-slate-600" />
-        <StatCard label="총 조회수" value={stats.views.toLocaleString()} icon={Eye} color="bg-blue-600 text-blue-600" />
-        <StatCard label="총 좋아요" value={stats.likes.toLocaleString()} icon={ThumbsUp} color="bg-rose-600 text-rose-600" />
-        <StatCard label="총 댓글" value={stats.comments.toLocaleString()} icon={MessageCircle} color="bg-indigo-600 text-indigo-600" />
+        <StatCard label="평균 조회수" value={stats.avgViews.toLocaleString()} icon={Eye} color="bg-blue-600 text-blue-600" />
+        <StatCard label="평균 좋아요" value={stats.avgLikes.toLocaleString()} icon={ThumbsUp} color="bg-rose-600 text-rose-600" />
+        <StatCard label="평균 댓글" value={stats.avgComments.toLocaleString()} icon={MessageCircle} color="bg-indigo-600 text-indigo-600" />
       </div>
 
       {/* TOP 5 영상 차트 */}
