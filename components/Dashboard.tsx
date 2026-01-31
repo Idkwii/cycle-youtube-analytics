@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Video, VideoTypeFilter, SortOption, Folder, Channel, AnalysisPeriod } from '../types';
 import VideoTable from './VideoTable';
-import { Eye, ThumbsUp, MessageCircle, Film, Calendar } from 'lucide-react';
+import { Eye, ThumbsUp, MessageCircle, Film } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 interface DashboardProps {
@@ -57,14 +57,17 @@ const Dashboard: React.FC<DashboardProps> = ({
   }, [filteredVideos]);
 
   const chartData = useMemo(() => {
-      const channelStats: Record<string, {채널명: string, 조회수: number}> = {};
-      filteredVideos.forEach(v => {
-          if (!channelStats[v.channelId]) {
-              channelStats[v.channelId] = { 채널명: v.channelTitle, 조회수: 0 };
-          }
-          channelStats[v.channelId].조회수 += v.viewCount;
-      });
-      return Object.values(channelStats).sort((a, b) => b.조회수 - a.조회수).slice(0, 5);
+      // 영상 기준 조회수 내림차순 정렬 후 상위 5개
+      return [...filteredVideos]
+        .sort((a, b) => b.viewCount - a.viewCount)
+        .slice(0, 5)
+        .map(v => ({
+            name: v.title.length > 12 ? v.title.substring(0, 12) + '...' : v.title, // 축 표시용 짧은 제목
+            fullTitle: v.title, // 툴팁용 전체 제목
+            views: v.viewCount,
+            id: v.id, // 링크 이동용 ID
+            channel: v.channelTitle
+        }));
   }, [filteredVideos]);
 
   const StatCard = ({ label, value, icon: Icon, color }: { label: string, value: string, icon: any, color: string }) => (
@@ -134,17 +137,62 @@ const Dashboard: React.FC<DashboardProps> = ({
         <StatCard label="총 댓글" value={stats.comments.toLocaleString()} icon={MessageCircle} color="bg-indigo-600 text-indigo-600" />
       </div>
 
-      {filteredVideos.length > 0 && !selectedChannelId && (
+      {/* TOP 5 영상 차트 */}
+      {filteredVideos.length > 0 && (
          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-            <h3 className="font-semibold text-slate-800 mb-6">조회수 TOP 5 채널</h3>
+            <h3 className="font-semibold text-slate-800 mb-6 flex items-center gap-2">
+                <Eye size={18} className="text-blue-600" />
+                조회수 TOP 5 영상
+                <span className="text-xs font-normal text-slate-400 ml-auto">클릭하여 영상 바로가기</span>
+            </h3>
             <div className="h-64 w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <XAxis dataKey="채널명" tick={{fontSize: 12}} axisLine={false} tickLine={false} />
-                        <YAxis hide />
-                        <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} cursor={{fill: '#f1f5f9'}} />
-                        <Bar dataKey="조회수" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={60} />
+                    <BarChart 
+                        data={chartData} 
+                        layout="vertical"
+                        margin={{ left: 10, right: 30, top: 0, bottom: 0 }}
+                    >
+                        <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
+                        <XAxis type="number" hide />
+                        <YAxis 
+                            dataKey="name" 
+                            type="category" 
+                            width={100} 
+                            tick={{fontSize: 12, fill: '#64748b'}} 
+                            axisLine={false} 
+                            tickLine={false} 
+                        />
+                        <Tooltip 
+                            cursor={{fill: '#f8fafc'}}
+                            content={({ active, payload }) => {
+                                if (active && payload && payload.length) {
+                                const data = payload[0].payload;
+                                return (
+                                    <div className="bg-white p-3 border border-slate-100 shadow-lg rounded-lg z-50 max-w-xs">
+                                        <p className="font-bold text-sm text-slate-900 mb-1 break-keep leading-tight">{data.fullTitle}</p>
+                                        <p className="text-xs text-slate-500 mb-2">{data.channel}</p>
+                                        <div className="flex items-center gap-2">
+                                            <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded font-bold">
+                                                {data.views.toLocaleString()}회
+                                            </span>
+                                            <span className="text-[10px] text-slate-400">클릭하여 이동 ↗</span>
+                                        </div>
+                                    </div>
+                                );
+                                }
+                                return null;
+                            }}
+                        />
+                        <Bar 
+                            dataKey="views" 
+                            fill="#3b82f6" 
+                            radius={[0, 4, 4, 0]} 
+                            barSize={24}
+                            className="cursor-pointer hover:opacity-80 transition-opacity"
+                            onClick={(data) => {
+                                window.open(`https://www.youtube.com/watch?v=${data.id}`, '_blank');
+                            }}
+                        />
                     </BarChart>
                 </ResponsiveContainer>
             </div>
