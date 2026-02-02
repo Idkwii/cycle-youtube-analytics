@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { Video, SortOption, Folder, Channel, AnalysisPeriod } from '../types';
 import VideoTable from './VideoTable';
-import { Eye, ThumbsUp, MessageCircle, Film } from 'lucide-react';
+import { Eye, ThumbsUp, MessageCircle, Film, Settings } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 interface DashboardProps {
@@ -14,6 +14,8 @@ interface DashboardProps {
   isLoading: boolean;
   period: AnalysisPeriod;
   setPeriod: (period: AnalysisPeriod) => void;
+  apiKey: string;
+  setApiKey: (key: string) => void;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ 
@@ -24,9 +26,12 @@ const Dashboard: React.FC<DashboardProps> = ({
     folders, 
     isLoading,
     period,
-    setPeriod
+    setPeriod,
+    apiKey,
+    setApiKey
 }) => {
   const [sortOption, setSortOption] = useState<SortOption>(SortOption.VIEWS_DESC);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const scopeVideos = useMemo(() => {
     if (selectedChannelId) {
@@ -40,20 +45,15 @@ const Dashboard: React.FC<DashboardProps> = ({
   }, [videos, selectedFolderId, selectedChannelId, channels]);
 
   const filteredVideos = useMemo(() => {
-    // 숏폼을 완전히 제외하고 롱폼(일반 영상)만 필터링
     return scopeVideos.filter(v => !v.isShort);
   }, [scopeVideos]);
 
   const stats = useMemo(() => {
     const count = filteredVideos.length;
-    if (count === 0) {
-        return { count: 0, avgViews: 0, avgLikes: 0, avgComments: 0 };
-    }
-
+    if (count === 0) return { count: 0, avgViews: 0, avgLikes: 0, avgComments: 0 };
     const totalViews = filteredVideos.reduce((acc, v) => acc + v.viewCount, 0);
     const totalLikes = filteredVideos.reduce((acc, v) => acc + v.likeCount, 0);
     const totalComments = filteredVideos.reduce((acc, v) => acc + v.commentCount, 0);
-
     return {
       count,
       avgViews: Math.round(totalViews / count),
@@ -97,12 +97,12 @@ const Dashboard: React.FC<DashboardProps> = ({
   }
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8">
+    <div className="p-8 max-w-7xl mx-auto space-y-8 relative pb-20">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex items-center gap-4">
             <div>
                 <h1 className="text-2xl font-bold text-slate-900">{viewTitle} 성과 분석</h1>
-                <p className="text-slate-500 text-sm mt-1">최근 {period}일 데이터 분석 중 (숏폼 제외)</p>
+                <p className="text-slate-500 text-sm mt-1">최근 {period}일 데이터 분석 중 (롱폼 기준)</p>
             </div>
             <div className="flex items-center bg-slate-200 p-1 rounded-lg ml-2">
                 {[7, 30].map((p) => (
@@ -132,56 +132,29 @@ const Dashboard: React.FC<DashboardProps> = ({
             <h3 className="font-semibold text-slate-800 mb-6 flex items-center gap-2">
                 <Eye size={18} className="text-blue-600" />
                 조회수 TOP 5 영상
-                <span className="text-xs font-normal text-slate-400 ml-auto">클릭하여 영상 바로가기</span>
             </h3>
             <div className="h-64 w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                    <BarChart 
-                        data={chartData} 
-                        layout="vertical"
-                        margin={{ left: 10, right: 30, top: 0, bottom: 0 }}
-                    >
+                    <BarChart data={chartData} layout="vertical">
                         <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
                         <XAxis type="number" hide />
-                        <YAxis 
-                            dataKey="name" 
-                            type="category" 
-                            width={100} 
-                            tick={{fontSize: 12, fill: '#64748b'}} 
-                            axisLine={false} 
-                            tickLine={false} 
-                        />
+                        <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 12, fill: '#64748b'}} axisLine={false} tickLine={false} />
                         <Tooltip 
                             cursor={{fill: '#f8fafc'}}
                             content={({ active, payload }) => {
                                 if (active && payload && payload.length) {
-                                const data = payload[0].payload;
-                                return (
-                                    <div className="bg-white p-3 border border-slate-100 shadow-lg rounded-lg z-50 max-w-xs">
-                                        <p className="font-bold text-sm text-slate-900 mb-1 break-keep leading-tight">{data.fullTitle}</p>
-                                        <p className="text-xs text-slate-500 mb-2">{data.channel}</p>
-                                        <div className="flex items-center gap-2">
-                                            <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded font-bold">
-                                                {data.views.toLocaleString()}회
-                                            </span>
-                                            <span className="text-[10px] text-slate-400">클릭하여 이동 ↗</span>
+                                    const data = payload[0].payload;
+                                    return (
+                                        <div className="bg-white p-3 border border-slate-100 shadow-lg rounded-lg z-50">
+                                            <p className="font-bold text-sm text-slate-900 mb-1">{data.fullTitle}</p>
+                                            <p className="text-xs text-blue-600 font-bold">{data.views.toLocaleString()}회</p>
                                         </div>
-                                    </div>
-                                );
+                                    );
                                 }
                                 return null;
                             }}
                         />
-                        <Bar 
-                            dataKey="views" 
-                            fill="#3b82f6" 
-                            radius={[0, 4, 4, 0]} 
-                            barSize={24}
-                            className="cursor-pointer hover:opacity-80 transition-opacity"
-                            onClick={(data) => {
-                                window.open(`https://www.youtube.com/watch?v=${data.id}`, '_blank');
-                            }}
-                        />
+                        <Bar dataKey="views" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={24} className="cursor-pointer" onClick={(data) => window.open(`https://www.youtube.com/watch?v=${data.id}`, '_blank')} />
                     </BarChart>
                 </ResponsiveContainer>
             </div>
@@ -190,6 +163,29 @@ const Dashboard: React.FC<DashboardProps> = ({
 
       <VideoTable videos={filteredVideos} sortOption={sortOption} setSortOption={setSortOption} period={period} />
       
+      {/* 관리자용 비밀 설정창 */}
+      <div className="absolute bottom-4 right-8 flex flex-col items-end">
+          {isSettingsOpen && (
+              <div className="bg-white p-4 rounded-2xl shadow-2xl border border-slate-200 mb-2 w-72 animate-in slide-in-from-bottom-4">
+                  <p className="text-xs font-bold text-slate-900 mb-2">API 키 관리</p>
+                  <input 
+                      type="password" 
+                      value={apiKey} 
+                      onChange={(e) => setApiKey(e.target.value)}
+                      placeholder="API 키 변경"
+                      className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg mb-2 focus:ring-2 focus:ring-blue-600 outline-none"
+                  />
+                  <p className="text-[10px] text-slate-400">키를 변경하면 즉시 반영됩니다.</p>
+              </div>
+          )}
+          <button 
+              onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+              className="p-3 bg-white text-slate-400 hover:text-slate-600 rounded-full shadow-md border border-slate-100 transition-colors"
+          >
+              <Settings size={20} />
+          </button>
+      </div>
+
       {isLoading && (
           <div className="fixed inset-0 bg-white/50 backdrop-blur-sm z-50 flex items-center justify-center">
               <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>

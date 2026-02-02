@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
 import { Folder, Channel } from '../types';
-import { Plus, Trash2, FolderPlus, Youtube, RefreshCw, Key, Folder as FolderIcon, GripVertical, ChevronRight, ChevronDown, ChevronUp, Share2, CheckCircle2, BarChart3, ExternalLink } from 'lucide-react';
+import { Plus, Trash2, FolderPlus, Youtube, RefreshCw, Folder as FolderIcon, GripVertical, ChevronRight, ChevronDown, Share2, BarChart3, ExternalLink } from 'lucide-react';
 
 interface SidebarProps {
   apiKey: string;
@@ -37,9 +38,6 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [newChannelInput, setNewChannelInput] = useState('');
   const [isAddingChannel, setIsAddingChannel] = useState(false);
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
-  
-  // API 설정 섹션 열림/닫힘 상태
-  const [isApiConfigOpen, setIsApiConfigOpen] = useState(!apiKey);
 
   const handleAddFolder = (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,7 +54,6 @@ const Sidebar: React.FC<SidebarProps> = ({
       if (!targetId && folders.length > 0) {
           targetId = folders[0].id;
       }
-      
       setIsAddingChannel(true);
       await addChannel(newChannelInput.trim(), targetId || "");
       setIsAddingChannel(false);
@@ -66,20 +63,14 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   const handleShareConfig = () => {
     try {
-        const data = {
-            apiKey, 
-            channels,
-            folders
-        };
+        const data = { apiKey, channels, folders };
         const jsonStr = JSON.stringify(data);
         const b64 = window.btoa(unescape(encodeURIComponent(jsonStr)));
         const url = `${window.location.origin}${window.location.pathname}?share=${b64}`;
-
         navigator.clipboard.writeText(url).then(() => {
-            alert("✅ 팀원 공유용 링크가 복사되었습니다!\n\n팀원들에게 이 링크를 보내주시면,\n현재 등록된 채널, 폴더, API 키 설정이 그대로 적용됩니다.");
+            alert("✅ 팀원 공유용 링크가 복사되었습니다!\n\n이 링크로 접속하면 API 키 입력 없이 즉시 데이터를 볼 수 있습니다.");
         });
     } catch (e) {
-        console.error("Share failed", e);
         alert("링크 생성 중 오류가 발생했습니다.");
     }
   };
@@ -91,106 +82,34 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   const handleDragOver = (e: React.DragEvent, folderId: string) => {
     e.preventDefault();
-    if (dragOverFolderId !== folderId) {
-        setDragOverFolderId(folderId);
-    }
-  };
-
-  const handleDragLeave = () => {
-     setDragOverFolderId(null);
+    if (dragOverFolderId !== folderId) setDragOverFolderId(folderId);
   };
 
   const handleDrop = (e: React.DragEvent, targetFolderId: string) => {
     e.preventDefault();
     setDragOverFolderId(null);
     const channelId = e.dataTransfer.getData('channelId');
-    if (channelId) {
-        moveChannel(channelId, targetFolderId);
-    }
+    if (channelId) moveChannel(channelId, targetFolderId);
   };
 
   return (
-    <div className="w-80 bg-white border-r border-slate-200 h-screen flex flex-col fixed left-0 top-0 z-20 overflow-y-auto font-sans">
+    <div className="w-80 bg-white border-r border-slate-200 h-screen flex flex-col fixed left-0 top-0 z-20 font-sans">
       <div className="p-6 border-b border-slate-200">
         <div className="flex items-center gap-2 mb-6">
           <Youtube className="text-red-600" size={32} />
           <h1 className="font-bold text-lg tracking-tight text-slate-900 leading-tight">Cycle Youtube<br/>Analytics</h1>
         </div>
         
-        {/* 새로고침 버튼 상단 고정 */}
         <button
             onClick={refreshData}
             disabled={!apiKey}
-            className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-xl text-sm font-bold transition-all shadow-sm hover:shadow-md mb-4 disabled:opacity-50 disabled:bg-slate-400"
+            className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-xl text-sm font-bold transition-all shadow-sm hover:shadow-md mb-4 disabled:opacity-50"
         >
             <RefreshCw size={18} />
             데이터 새로고침
         </button>
 
-        {/* API 및 공유 설정 */}
-        <div className="bg-slate-100 rounded-xl border border-slate-200 shadow-sm mb-4 overflow-hidden transition-all">
-          <button 
-            onClick={() => setIsApiConfigOpen(!isApiConfigOpen)}
-            className="w-full p-4 flex items-center justify-between text-left hover:bg-slate-200/50 transition-colors"
-          >
-            <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                <Key size={16} className="text-slate-700" />
-                <span>설정 및 API</span>
-                {!isApiConfigOpen && apiKey && (
-                    <span className="flex items-center gap-1 text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
-                        <CheckCircle2 size={10} />
-                        연결됨
-                    </span>
-                )}
-            </div>
-            {isApiConfigOpen ? <ChevronUp size={16} className="text-slate-500" /> : <ChevronDown size={16} className="text-slate-500" />}
-          </button>
-
-          {isApiConfigOpen && (
-              <div className="px-4 pb-4 space-y-3 border-t border-slate-200 pt-3 animate-in slide-in-from-top-2 duration-200">
-                 <div className="relative">
-                     <input
-                        type="password"
-                        value={apiKey}
-                        onChange={(e) => setApiKey(e.target.value)}
-                        placeholder="YouTube API Key 입력"
-                        className="w-full pl-3 pr-10 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white text-slate-900"
-                    />
-                    <div className="absolute right-2 top-1/2 -translate-y-1/2">
-                        {apiKey ? <CheckCircle2 size={16} className="text-green-500" /> : null}
-                    </div>
-                 </div>
-                
-                <div className="grid grid-cols-2 gap-2">
-                    <button 
-                        onClick={handleShareConfig}
-                        className="flex items-center justify-center gap-2 px-2 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg transition-colors font-bold text-[10px] shadow-sm"
-                    >
-                        <Share2 size={12} />
-                        설정 공유
-                    </button>
-                    
-                    <a 
-                        href="https://console.cloud.google.com/apis/enabled/youtube.googleapis.com/quotas"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center justify-center gap-2 px-2 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg transition-colors font-bold text-[10px] shadow-sm"
-                    >
-                        <BarChart3 size={12} />
-                        할당량 확인
-                        <ExternalLink size={10} className="opacity-50" />
-                    </a>
-                </div>
-                
-                <p className="text-[10px] text-slate-500 leading-tight text-center">
-                    일일 할당량은 한국시간 오후 4~5시경 초기화됩니다.
-                </p>
-              </div>
-          )}
-        </div>
-
-        {/* 채널 추가 섹션 */}
-        <div className="bg-slate-100 p-4 rounded-xl border border-slate-200 shadow-sm">
+        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm">
             <h2 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
                 <Plus size={16} className="text-slate-700" />
                 채널 추가
@@ -208,21 +127,14 @@ const Sidebar: React.FC<SidebarProps> = ({
                     disabled={isAddingChannel || !apiKey}
                     className="w-full bg-slate-900 hover:bg-black text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                 >
-                    {isAddingChannel ? (
-                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    ) : (
-                        <>
-                            <Plus size={16} />
-                            <span>추가하기</span>
-                        </>
-                    )}
+                    {isAddingChannel ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <span>추가하기</span>}
                 </button>
             </form>
         </div>
       </div>
 
       <div className="p-6 flex-1 overflow-y-auto space-y-6">
-        <div className="bg-slate-100 p-4 rounded-xl border border-slate-200 shadow-sm">
+        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm">
             <h2 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
                 <FolderPlus size={16} className="text-slate-700" />
                 폴더 관리
@@ -242,7 +154,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         <div>
-            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 px-1">채널 관리</h2>
+            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 px-1 text-[10px]">채널 리스트</h2>
             <div className="space-y-2">
                 <button
                     onClick={() => { setSelectedFolderId(null); setSelectedChannelId(null); }}
@@ -262,7 +174,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                             <button
                                 onClick={() => setSelectedFolderId(folder.id)}
                                 onDragOver={(e) => handleDragOver(e, folder.id)}
-                                onDragLeave={handleDragLeave}
                                 onDrop={(e) => handleDrop(e, folder.id)}
                                 className={`w-full text-left px-3 py-3 rounded-lg text-sm font-bold flex items-center gap-3 transition-colors ${
                                     isFolderSelected ? 'text-blue-700' : 'text-slate-700 hover:bg-slate-50'
@@ -301,6 +212,21 @@ const Sidebar: React.FC<SidebarProps> = ({
                 })}
             </div>
         </div>
+      </div>
+
+      <div className="p-4 border-t border-slate-100 space-y-2">
+          <button 
+              onClick={handleShareConfig}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors font-bold text-xs"
+          >
+              <Share2 size={14} />
+              팀원에게 대시보드 공유
+          </button>
+          <div className="flex items-center justify-center gap-4 text-[10px] text-slate-400">
+              <a href="https://console.cloud.google.com/apis/enabled/youtube.googleapis.com/quotas" target="_blank" className="hover:text-blue-600 flex items-center gap-1">
+                  <BarChart3 size={12} /> 할당량 확인 <ExternalLink size={10} />
+              </a>
+          </div>
       </div>
     </div>
   );
