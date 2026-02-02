@@ -2,26 +2,30 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
-import { AppState, Channel, Folder, Video, AnalysisPeriod } from './types';
+import { Channel, Folder, Video, AnalysisPeriod } from './types';
 import { fetchChannelInfo, fetchRecentVideos } from './services/youtubeService';
-import { Key } from 'lucide-react';
 
 const STORAGE_KEY = 'yt_dashboard_state';
 const VIDEO_CACHE_KEY = 'yt_dashboard_videos';
 
-const getEnvApiKey = () => {
+/**
+ * [중요] 여기에 본인의 YouTube Data API v3 키를 입력하세요.
+ * 여기에 입력하면 공유받은 모든 사람이 별도의 입력 없이 바로 결과를 볼 수 있습니다.
+ */
+const CONST_API_KEY = 'AIzaSyA3JRkSp_eMJ3oWKhqDwIbY5IVbb99Uobc'; // <-- 여기에 'AIza...'로 시작하는 키를 입력하세요.
+
+const getInitialApiKey = () => {
+  if (CONST_API_KEY) return CONST_API_KEY;
   try {
     // @ts-ignore
-    return import.meta.env?.VITE_YOUTUBE_API_KEY || '';
+    return import.meta.env?.VITE_YOUTUBE_API_KEY || ''; 
   } catch {
     return '';
   }
 };
 
-const DEFAULT_API_KEY = getEnvApiKey();
-
 const App: React.FC = () => {
-  const [apiKey, setApiKey] = useState<string>('');
+  const [apiKey, setApiKey] = useState<string>(getInitialApiKey());
   const [channels, setChannels] = useState<Channel[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [period, setPeriod] = useState<AnalysisPeriod>(30);
@@ -37,14 +41,15 @@ const App: React.FC = () => {
     const savedState = localStorage.getItem(STORAGE_KEY);
     const savedVideos = localStorage.getItem(VIDEO_CACHE_KEY);
 
-    let initialApiKey = DEFAULT_API_KEY;
+    let initialApiKey = getInitialApiKey();
     let initialChannels: Channel[] = [];
     let initialFolders: Folder[] = [];
     let initialPeriod: AnalysisPeriod = 30;
 
     if (savedState) {
       const parsed = JSON.parse(savedState);
-      initialApiKey = parsed.apiKey || DEFAULT_API_KEY;
+      // 코드가 우선순위가 가장 높고, 없으면 저장된 값을 사용
+      initialApiKey = CONST_API_KEY || parsed.apiKey || initialApiKey;
       initialChannels = parsed.channels || [];
       initialFolders = parsed.folders || [];
       initialPeriod = parsed.period || 30;
@@ -56,7 +61,8 @@ const App: React.FC = () => {
       try {
         const jsonStr = decodeURIComponent(escape(window.atob(shareData)));
         const data = JSON.parse(jsonStr);
-        if (data.apiKey) initialApiKey = data.apiKey;
+        // 공유된 정보가 있으면 적용 (단, 코드가 있으면 코드가 우선)
+        if (data.apiKey && !CONST_API_KEY) initialApiKey = data.apiKey;
         if (data.channels) initialChannels = data.channels;
         if (data.folders) initialFolders = data.folders;
         window.history.replaceState({}, document.title, window.location.pathname);
@@ -80,9 +86,7 @@ const App: React.FC = () => {
 
   // 설정값 저장
   useEffect(() => {
-    if (apiKey || channels.length > 0) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ apiKey, channels, folders, period }));
-    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ apiKey, channels, folders, period }));
   }, [apiKey, channels, folders, period]);
 
   // 영상 데이터 캐시 저장
@@ -109,7 +113,7 @@ const App: React.FC = () => {
       setDataPeriod(targetPeriod);
       setLastFetched(Date.now());
     } catch (error: any) {
-      alert(error.message);
+      console.error(error.message);
     } finally {
       setIsLoading(false);
     }
@@ -128,7 +132,10 @@ const App: React.FC = () => {
   };
 
   const addChannel = async (identifier: string, folderId: string) => {
-    if (!apiKey) return;
+    if (!apiKey) {
+      alert("코드 내부에 API 키가 설정되지 않았습니다.");
+      return;
+    }
     setIsLoading(true);
     try {
       const info = await fetchChannelInfo(identifier, apiKey);
@@ -176,51 +183,14 @@ const App: React.FC = () => {
         refreshData={() => refreshData(undefined, true)}
       />
       <main className="flex-1 ml-80 overflow-y-auto">
-        {apiKey ? (
-             <Dashboard 
-                videos={videos} channels={channels}
-                selectedFolderId={selectedFolderId}
-                selectedChannelId={selectedChannelId}
-                folders={folders} isLoading={isLoading}
-                period={period} setPeriod={setPeriod}
-                apiKey={apiKey} setApiKey={setApiKey}
-             />
-        ) : (
-            <div className="flex items-center justify-center h-full px-4">
-                <div className="bg-white p-10 rounded-3xl shadow-2xl border border-slate-200 text-center max-w-md w-full">
-                    <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                        <Key size={32} />
-                    </div>
-                    <h2 className="text-2xl font-bold text-slate-900 mb-2">YouTube Analytics 시작하기</h2>
-                    <p className="text-slate-500 mb-8 text-sm">성과를 분석할 채널을 불러오기 위해<br/>YouTube Data API 키를 입력해 주세요.</p>
-                    
-                    <div className="space-y-4">
-                        <input
-                            type="password"
-                            placeholder="API 키를 입력하세요"
-                            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-600 focus:outline-none text-center"
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                    setApiKey((e.target as HTMLInputElement).value);
-                                }
-                            }}
-                        />
-                        <button 
-                            onClick={() => {
-                                const input = document.querySelector('input[type="password"]') as HTMLInputElement;
-                                if (input.value) setApiKey(input.value);
-                            }}
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-all shadow-lg"
-                        >
-                            시작하기
-                        </button>
-                    </div>
-                    <p className="mt-6 text-[11px] text-slate-400">
-                        API 키가 없으신가요? <a href="https://console.cloud.google.com/" target="_blank" className="underline hover:text-blue-600">Google Cloud Console</a>에서 무료로 발급 가능합니다.
-                    </p>
-                </div>
-            </div>
-        )}
+        <Dashboard 
+          videos={videos} channels={channels}
+          selectedFolderId={selectedFolderId}
+          selectedChannelId={selectedChannelId}
+          folders={folders} isLoading={isLoading}
+          period={period} setPeriod={setPeriod}
+          apiKey={apiKey} setApiKey={setApiKey}
+        />
       </main>
     </div>
   );

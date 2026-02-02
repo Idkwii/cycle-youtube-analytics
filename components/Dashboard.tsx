@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { Video, SortOption, Folder, Channel, AnalysisPeriod } from '../types';
 import VideoTable from './VideoTable';
-import { Eye, ThumbsUp, MessageCircle, Film, Settings } from 'lucide-react';
+import { Eye, ThumbsUp, MessageCircle, Film, Settings, PlusCircle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 interface DashboardProps {
@@ -96,6 +96,47 @@ const Dashboard: React.FC<DashboardProps> = ({
       if (f) viewTitle = f.name;
   }
 
+  // 채널이 하나도 없을 때 보여줄 빈 화면
+  if (channels.length === 0) {
+      return (
+          <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+              <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-3xl flex items-center justify-center mb-6">
+                  <PlusCircle size={40} />
+              </div>
+              <h2 className="text-2xl font-bold text-slate-900 mb-2">분석할 채널이 없습니다</h2>
+              <p className="text-slate-500 max-w-sm">사이드바에서 채널 핸들(@handle) 또는 ID를 입력하여 성과 분석을 시작해 보세요.</p>
+              
+              <div className="mt-20 opacity-30 flex flex-col items-center">
+                  <Settings size={20} className="mb-2" />
+                  <p className="text-[10px] text-slate-400">관리자용 설정은 우측 하단에 숨겨져 있습니다.</p>
+              </div>
+
+              {/* 비밀 설정 아이콘 유지 */}
+              <div className="fixed bottom-4 right-8 flex flex-col items-end">
+                {isSettingsOpen && (
+                    <div className="bg-white p-4 rounded-2xl shadow-2xl border border-slate-200 mb-2 w-72 animate-in slide-in-from-bottom-4">
+                        <p className="text-xs font-bold text-slate-900 mb-2">API 키 관리</p>
+                        <input 
+                            type="password" 
+                            value={apiKey} 
+                            onChange={(e) => setApiKey(e.target.value)}
+                            placeholder="API 키 변경"
+                            className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg mb-2 focus:ring-2 focus:ring-blue-600 outline-none"
+                        />
+                        <p className="text-[10px] text-slate-400">키를 변경하면 즉시 반영됩니다.</p>
+                    </div>
+                )}
+                <button 
+                    onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                    className="p-3 bg-white text-slate-300 hover:text-slate-600 rounded-full shadow-md border border-slate-100 transition-colors"
+                >
+                    <Settings size={20} />
+                </button>
+              </div>
+          </div>
+      );
+  }
+
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8 relative pb-20">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -164,7 +205,7 @@ const Dashboard: React.FC<DashboardProps> = ({
       <VideoTable videos={filteredVideos} sortOption={sortOption} setSortOption={setSortOption} period={period} />
       
       {/* 관리자용 비밀 설정창 */}
-      <div className="absolute bottom-4 right-8 flex flex-col items-end">
+      <div className="fixed bottom-4 right-8 flex flex-col items-end">
           {isSettingsOpen && (
               <div className="bg-white p-4 rounded-2xl shadow-2xl border border-slate-200 mb-2 w-72 animate-in slide-in-from-bottom-4">
                   <p className="text-xs font-bold text-slate-900 mb-2">API 키 관리</p>
