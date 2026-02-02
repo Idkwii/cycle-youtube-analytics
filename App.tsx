@@ -20,78 +20,93 @@ const getEnvApiKey = () => {
 const DEFAULT_API_KEY = getEnvApiKey();
 
 const App: React.FC = () => {
-  // 기본 상태 로드
-  const [apiKey, setApiKey] = useState<string>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-        const parsed = JSON.parse(saved);
-        return parsed.apiKey || DEFAULT_API_KEY;
-    }
-    return DEFAULT_API_KEY;
-  });
-
-  const [channels, setChannels] = useState<Channel[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? JSON.parse(saved).channels || [] : [];
-  });
-
-  const [folders, setFolders] = useState<Folder[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? JSON.parse(saved).folders || [] : [];
-  });
-
-  const [period, setPeriod] = useState<AnalysisPeriod>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? JSON.parse(saved).period || 30 : 30;
-  });
-
-  // 영상 데이터 및 메타데이터 (캐시 적용)
-  const [videos, setVideos] = useState<Video[]>(() => {
-    const saved = localStorage.getItem(VIDEO_CACHE_KEY);
-    return saved ? JSON.parse(saved).data || [] : [];
-  });
-  
-  const [lastFetched, setLastFetched] = useState<number | null>(() => {
-    const saved = localStorage.getItem(VIDEO_CACHE_KEY);
-    return saved ? JSON.parse(saved).timestamp || null : null;
-  });
-
-  // 현재 캐시된 데이터가 어떤 기간(7일/30일) 기준인지 추적
-  const [dataPeriod, setDataPeriod] = useState<AnalysisPeriod | null>(() => {
-    const saved = localStorage.getItem(VIDEO_CACHE_KEY);
-    return saved ? JSON.parse(saved).period || null : null;
-  });
-
+  const [apiKey, setApiKey] = useState<string>('');
+  const [channels, setChannels] = useState<Channel[]>([]);
+  const [folders, setFolders] = useState<Folder[]>([]);
+  const [period, setPeriod] = useState<AnalysisPeriod>(30);
+  const [videos, setVideos] = useState<Video[]>([]);
+  const [lastFetched, setLastFetched] = useState<number | null>(null);
+  const [dataPeriod, setDataPeriod] = useState<AnalysisPeriod | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
 
+  // 1. 초기화: 로컬 스토리지 및 URL 공유 파라미터 확인
+  useEffect(() => {
+    // 로컬 스토리지에서 기본 데이터 로드
+    const savedState = localStorage.getItem(STORAGE_KEY);
+    const savedVideos = localStorage.getItem(VIDEO_CACHE_KEY);
+
+    let initialApiKey = DEFAULT_API_KEY;
+    let initialChannels: Channel[] = [];
+    let initialFolders: Folder[] = [];
+    let initialPeriod: AnalysisPeriod = 30;
+
+    if (savedState) {
+      const parsed = JSON.parse(savedState);
+      initialApiKey = parsed.apiKey || DEFAULT_API_KEY;
+      initialChannels = parsed.channels || [];
+      initialFolders = parsed.folders || [];
+      initialPeriod = parsed.period || 30;
+    }
+
+    // URL 공유 파라미터 확인 (로컬 스토리지 데이터보다 우선순위 높음)
+    const params = new URLSearchParams(window.location.search);
+    const shareData = params.get('share');
+    if (shareData) {
+      try {
+        const jsonStr = decodeURIComponent(escape(window.atob(shareData)));
+        const data = JSON.parse(jsonStr);
+        if (data.apiKey) initialApiKey = data.apiKey;
+        if (data.channels) initialChannels = data.channels;
+        if (data.folders) initialFolders = data.folders;
+        
+        // URL에서 share 파라미터 제거 (깔끔한 URL 유지)
+        window.history.replaceState({}, document.title, window.location.pathname);
+        console.log("Shared config applied successfully");
+      } catch (e) {
+        console.error("Failed to parse shared data", e);
+      }
+    }
+
+    setApiKey(initialApiKey);
+    setChannels(initialChannels);
+    setFolders(initialFolders);
+    setPeriod(initialPeriod);
+
+    if (savedVideos) {
+      const parsed = JSON.parse(savedVideos);
+      setVideos(parsed.data || []);
+      setLastFetched(parsed.timestamp || null);
+      setDataPeriod(parsed.period || null);
+    }
+  }, []);
+
   // 설정값 저장
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ apiKey, channels, folders, period }));
+    if (apiKey || channels.length > 0) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ apiKey, channels, folders, period }));
+    }
   }, [apiKey, channels, folders, period]);
 
-  // 영상 데이터 캐시 저장 (데이터 기간 정보 포함)
+  // 영상 데이터 캐시 저장
   useEffect(() => {
     if (videos.length > 0) {
-        localStorage.setItem(VIDEO_CACHE_KEY, JSON.stringify({ 
-            data: videos, 
-            timestamp: lastFetched,
-            period: dataPeriod 
-        }));
+      localStorage.setItem(VIDEO_CACHE_KEY, JSON.stringify({ 
+        data: videos, 
+        timestamp: lastFetched,
+        period: dataPeriod 
+      }));
     }
   }, [videos, lastFetched, dataPeriod]);
 
   const refreshData = useCallback(async (customPeriod?: AnalysisPeriod, force = false) => {
-    if (!apiKey) return;
-    if (channels.length === 0) return;
+    if (!apiKey || channels.length === 0) return;
 
-    // 강제 새로고침이 아니고, 기간이 동일하며, 최근 30분 이내에 불러온 적이 있다면 생략 (할당량 보호)
     const now = Date.now();
-    // customPeriod가 있다는 것은 기간이 변경되어 호출되었다는 의미이므로 체크 통과
+    // 30분 캐시 (강제 새로고침이 아니거나 기간 변경이 아닐 때만 적용)
     if (!force && !customPeriod && lastFetched && (now - lastFetched < 30 * 60 * 1000)) {
-        console.log("Using cached data (fetched less than 30 mins ago)");
-        return;
+      return;
     }
     
     setIsLoading(true);
@@ -103,27 +118,19 @@ const App: React.FC = () => {
       setLastFetched(Date.now());
     } catch (error: any) {
       alert(error.message);
-      console.error(error);
     } finally {
       setIsLoading(false);
     }
   }, [apiKey, channels, period, lastFetched]);
 
-  // 앱 시작 시 또는 기간 변경 시 데이터 로드
+  // 기간 변경 감지 및 자동 로드
   useEffect(() => {
     if (apiKey && channels.length > 0) {
-        // 현재 선택된 기간과 데이터의 기간이 다르면 강제로 리프레시 (캐시 시간 무시)
-        if (dataPeriod !== period) {
-            refreshData(period);
-        } else {
-            // 기간이 같다면 시간 경과 체크
-            const shouldAutoRefresh = !lastFetched || (Date.now() - lastFetched > 60 * 60 * 1000);
-            if (shouldAutoRefresh) {
-                refreshData();
-            }
-        }
+      if (dataPeriod !== period || !lastFetched) {
+        refreshData(period);
+      }
     }
-  }, [period]); // apiKey나 channels가 바뀔 때는 다른 로직이 처리하거나 수동 리프레시 권장
+  }, [apiKey, channels, period, dataPeriod, lastFetched, refreshData]);
 
   const addFolder = (name: string) => {
     setFolders([...folders, { id: `f-${Date.now()}`, name }]);
@@ -131,7 +138,6 @@ const App: React.FC = () => {
 
   const addChannel = async (identifier: string, folderId: string) => {
     if (!apiKey) { alert("API 키를 먼저 입력해주세요."); return; }
-    
     setIsLoading(true);
     try {
       const info = await fetchChannelInfo(identifier, apiKey);
@@ -139,18 +145,14 @@ const App: React.FC = () => {
         alert("이미 등록된 채널입니다.");
         return;
       }
-
       let targetId = folderId || (folders.length > 0 ? folders[0].id : null);
       if (!targetId) {
           const newF = { id: `f-${Date.now()}`, name: '기본 폴더' };
           setFolders([newF]);
           targetId = newF.id;
       }
-
       const newChannel = { ...info, folderId: targetId };
       setChannels(prev => [...prev, newChannel]);
-      
-      // 새 채널 추가 시에는 즉시 데이터 한 번 가져오기 (현재 기간 기준)
       const newV = await fetchRecentVideos([newChannel], apiKey, period);
       setVideos(prev => [...prev, ...newV]);
     } catch (error: any) {
@@ -180,7 +182,7 @@ const App: React.FC = () => {
         setSelectedChannelId={setSelectedChannelId}
         addFolder={addFolder} addChannel={addChannel}
         deleteChannel={deleteChannel} moveChannel={moveChannel}
-        refreshData={() => refreshData(undefined, true)} // 버튼 클릭 시 강제 새로고침
+        refreshData={() => refreshData(undefined, true)}
       />
       <main className="flex-1 ml-80 overflow-y-auto">
         {apiKey ? (
@@ -195,7 +197,7 @@ const App: React.FC = () => {
             <div className="flex items-center justify-center h-full text-slate-500">
                 <div className="bg-white p-12 rounded-3xl shadow-xl border border-slate-200 text-center max-w-lg">
                     <h2 className="text-2xl font-bold text-slate-900 mb-4">API 키가 필요합니다</h2>
-                    <p className="text-slate-600 mb-4">사이드바 설정에서 API 키를 입력해 주세요.</p>
+                    <p className="text-slate-600 mb-4">사이드바 설정에서 API 키를 입력하거나, 공유받은 링크로 접속해 주세요.</p>
                 </div>
             </div>
         )}

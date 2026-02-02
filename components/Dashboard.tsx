@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Video, SortOption, Folder, Channel, AnalysisPeriod } from '../types';
 import VideoTable from './VideoTable';
@@ -62,15 +63,14 @@ const Dashboard: React.FC<DashboardProps> = ({
   }, [filteredVideos]);
 
   const chartData = useMemo(() => {
-      // 영상 기준 조회수 내림차순 정렬 후 상위 5개
       return [...filteredVideos]
         .sort((a, b) => b.viewCount - a.viewCount)
         .slice(0, 5)
         .map(v => ({
-            name: v.title.length > 12 ? v.title.substring(0, 12) + '...' : v.title, // 축 표시용 짧은 제목
-            fullTitle: v.title, // 툴팁용 전체 제목
+            name: v.title.length > 12 ? v.title.substring(0, 12) + '...' : v.title,
+            fullTitle: v.title,
             views: v.viewCount,
-            id: v.id, // 링크 이동용 ID
+            id: v.id,
             channel: v.channelTitle
         }));
   }, [filteredVideos]);
@@ -104,7 +104,6 @@ const Dashboard: React.FC<DashboardProps> = ({
                 <h1 className="text-2xl font-bold text-slate-900">{viewTitle} 성과 분석</h1>
                 <p className="text-slate-500 text-sm mt-1">최근 {period}일 데이터 분석 중 (숏폼 제외)</p>
             </div>
-            {/* 기간 선택 토글 */}
             <div className="flex items-center bg-slate-200 p-1 rounded-lg ml-2">
                 {[7, 30].map((p) => (
                     <button
@@ -119,8 +118,6 @@ const Dashboard: React.FC<DashboardProps> = ({
                 ))}
             </div>
         </div>
-        
-        {/* 숏폼 필터 버튼 제거됨 */}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -130,7 +127,6 @@ const Dashboard: React.FC<DashboardProps> = ({
         <StatCard label="평균 댓글" value={stats.avgComments.toLocaleString()} icon={MessageCircle} color="bg-indigo-600 text-indigo-600" />
       </div>
 
-      {/* TOP 5 영상 차트 */}
       {filteredVideos.length > 0 && (
          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <h3 className="font-semibold text-slate-800 mb-6 flex items-center gap-2">
