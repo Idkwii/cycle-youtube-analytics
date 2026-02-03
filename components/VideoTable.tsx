@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Video, SortOption, AnalysisPeriod } from '../types';
-import { ExternalLink, ThumbsUp, MessageCircle, ArrowUp, ArrowDown, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { ExternalLink, ThumbsUp, MessageCircle, ArrowUp, ArrowDown, TrendingUp, Minus, Clock } from 'lucide-react';
 
 interface VideoTableProps {
   videos: Video[];
@@ -57,6 +57,14 @@ const VideoTable: React.FC<VideoTableProps> = ({ videos, sortOption, setSortOpti
   const getEngagementRate = (video: Video) => {
     if (video.viewCount === 0) return 0;
     return ((video.likeCount + video.commentCount) / video.viewCount) * 100;
+  };
+
+  // VPH (Views Per Hour) 계산
+  const getVPH = (video: Video) => {
+    const published = new Date(video.publishedAt).getTime();
+    const now = new Date().getTime();
+    const hoursSince = Math.max((now - published) / (1000 * 60 * 60), 1); // 최소 1시간
+    return Math.round(video.viewCount / hoursSince);
   };
 
   // 성과 지수 렌더링 (평균 대비)
@@ -121,8 +129,8 @@ const VideoTable: React.FC<VideoTableProps> = ({ videos, sortOption, setSortOpti
           <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
             <tr>
               <th className="px-6 py-3 font-semibold w-[40%]">영상</th>
-              <th className="px-6 py-3 font-semibold">게시일</th>
               <th className="px-6 py-3 font-semibold text-right">성과 지표</th>
+              <th className="px-6 py-3 font-semibold text-right">VPH (시간당)</th>
               <th className="px-6 py-3 font-semibold text-right">조회수</th>
               <th className="px-6 py-3 font-semibold text-right">참여율</th>
             </tr>
@@ -130,6 +138,7 @@ const VideoTable: React.FC<VideoTableProps> = ({ videos, sortOption, setSortOpti
           <tbody className="divide-y divide-slate-100">
             {sortedVideos.map((video) => {
               const engRate = getEngagementRate(video);
+              const vph = getVPH(video);
               return (
               <tr key={video.id} className="hover:bg-slate-50 transition-colors">
                 <td className="px-6 py-4">
@@ -149,7 +158,10 @@ const VideoTable: React.FC<VideoTableProps> = ({ videos, sortOption, setSortOpti
                       </a>
                     </div>
                     <div className="min-w-0 max-w-xs">
-                        <div className="text-xs text-slate-500 mb-0.5">{video.channelTitle}</div>
+                        <div className="flex items-center gap-2 mb-0.5">
+                            <span className="text-xs text-slate-500">{video.channelTitle}</span>
+                            <span className="text-[10px] text-slate-400">• {new Date(video.publishedAt).toLocaleDateString()}</span>
+                        </div>
                         <a 
                             href={`https://www.youtube.com/watch?v=${video.id}`} 
                             target="_blank" 
@@ -161,12 +173,15 @@ const VideoTable: React.FC<VideoTableProps> = ({ videos, sortOption, setSortOpti
                     </div>
                   </div>
                 </td>
-                <td className="px-6 py-4 text-sm text-slate-500 whitespace-nowrap">
-                  {new Date(video.publishedAt).toLocaleDateString('ko-KR')}
-                  <div className="text-xs text-slate-400">{new Date(video.publishedAt).toLocaleTimeString('ko-KR', {hour: '2-digit', minute:'2-digit'})}</div>
-                </td>
                 <td className="px-6 py-4 text-right">
                     {avgViews && renderPerformance(video.viewCount, avgViews)}
+                </td>
+                <td className="px-6 py-4 text-right">
+                    <div className="flex items-center justify-end gap-1 text-slate-600 font-bold text-sm">
+                        <Clock size={12} className="text-slate-400" />
+                        {vph.toLocaleString()}
+                    </div>
+                    <p className="text-[10px] text-slate-400">views/hour</p>
                 </td>
                 <td className="px-6 py-4 text-right font-medium text-slate-700">
                   {video.viewCount.toLocaleString()}

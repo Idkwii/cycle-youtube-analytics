@@ -19,10 +19,11 @@ const CONST_API_KEY = 'AIzaSyA3JRkSp_eMJ3oWKhqDwIbY5IVbb99Uobc';
 
 /**
  * [필수] 내 채널 분석을 위해 필요한 OAuth 2.0 Client ID입니다.
- * Google Cloud Console > API 및 서비스 > 사용자 인증 정보 > OAuth 2.0 클라이언트 ID 만들기
- * (애플리케이션 유형: 웹 애플리케이션, 승인된 자바스크립트 원본: http://localhost:5173 등)
+ * 1. .env 파일에 VITE_GOOGLE_CLIENT_ID=... 로 설정하거나
+ * 2. 아래 문자열에 직접 붙여넣으세요.
  */
-const OAUTH_CLIENT_ID = 'YOUR_CLIENT_ID_HERE.apps.googleusercontent.com'; // <--- 여기에 Client ID 입력 필수
+// @ts-ignore
+const OAUTH_CLIENT_ID = import.meta.env?.VITE_GOOGLE_CLIENT_ID || 'YOUR_CLIENT_ID_HERE.apps.googleusercontent.com';
 
 const getInitialApiKey = () => {
   if (CONST_API_KEY) return CONST_API_KEY;

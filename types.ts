@@ -6,6 +6,7 @@ export interface Channel {
   thumbnail: string;
   uploadsPlaylistId: string;
   folderId: string;
+  subscriberCount: string; // New field
 }
 
 export interface Folder {

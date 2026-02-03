@@ -2,6 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { Video, SortOption, Folder, Channel, AnalysisPeriod } from '../types';
 import VideoTable from './VideoTable';
+import ChannelStats from './ChannelStats';
 import { Eye, ThumbsUp, MessageCircle, Film, Settings, PlusCircle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
@@ -88,9 +89,11 @@ const Dashboard: React.FC<DashboardProps> = ({
   );
 
   let viewTitle = "전체 채널";
+  let currentChannel: Channel | undefined = undefined;
+
   if (selectedChannelId) {
-      const ch = channels.find(c => c.id === selectedChannelId);
-      if (ch) viewTitle = ch.title;
+      currentChannel = channels.find(c => c.id === selectedChannelId);
+      if (currentChannel) viewTitle = currentChannel.title;
   } else if (selectedFolderId) {
       const f = folders.find(f => f.id === selectedFolderId);
       if (f) viewTitle = f.name;
@@ -160,6 +163,9 @@ const Dashboard: React.FC<DashboardProps> = ({
             </div>
         </div>
       </div>
+
+      {/* vidIQ Style Quick Stats Bar */}
+      <ChannelStats videos={scopeVideos} channel={currentChannel} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="영상 수" value={stats.count.toLocaleString()} icon={Film} color="bg-slate-600 text-slate-600" />

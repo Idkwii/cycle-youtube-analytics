@@ -36,7 +36,7 @@ export const fetchChannelInfo = async (identifier: string, apiKey: string): Prom
 
   // 1. 채널 ID (UC...) 형식인 경우 (비용: 1 유닛)
   if (cleanId.startsWith('UC') && cleanId.length > 20) {
-    const url = `${BASE_URL}/channels?part=snippet,contentDetails&id=${cleanId}&key=${apiKey}`;
+    const url = `${BASE_URL}/channels?part=snippet,contentDetails,statistics&id=${cleanId}&key=${apiKey}`;
     const res = await fetch(url);
     await handleApiError(res);
     const data = await res.json();
@@ -48,13 +48,14 @@ export const fetchChannelInfo = async (identifier: string, apiKey: string): Prom
         handle: item.snippet.customUrl,
         thumbnail: item.snippet.thumbnails.default.url,
         uploadsPlaylistId: item.contentDetails.relatedPlaylists.uploads,
+        subscriberCount: item.statistics.subscriberCount || '0',
       };
     }
   }
 
   // 2. 핸들 (@...) 형식인 경우 (비용: 1 유닛)
   if (cleanId.startsWith('@')) {
-    const url = `${BASE_URL}/channels?part=snippet,contentDetails&forHandle=${encodeURIComponent(cleanId)}&key=${apiKey}`;
+    const url = `${BASE_URL}/channels?part=snippet,contentDetails,statistics&forHandle=${encodeURIComponent(cleanId)}&key=${apiKey}`;
     const res = await fetch(url);
     await handleApiError(res);
     const data = await res.json();
@@ -66,6 +67,7 @@ export const fetchChannelInfo = async (identifier: string, apiKey: string): Prom
         handle: item.snippet.customUrl,
         thumbnail: item.snippet.thumbnails.default.url,
         uploadsPlaylistId: item.contentDetails.relatedPlaylists.uploads,
+        subscriberCount: item.statistics.subscriberCount || '0',
       };
     }
   }
@@ -80,7 +82,7 @@ export const fetchChannelInfo = async (identifier: string, apiKey: string): Prom
   
   // 찾은 ID로 다시 상세 정보 조회 (1 유닛)
   const foundId = sData.items[0].id.channelId;
-  const finalUrl = `${BASE_URL}/channels?part=snippet,contentDetails&id=${foundId}&key=${apiKey}`;
+  const finalUrl = `${BASE_URL}/channels?part=snippet,contentDetails,statistics&id=${foundId}&key=${apiKey}`;
   const fRes = await fetch(finalUrl);
   await handleApiError(fRes);
   const fData = await fRes.json();
@@ -91,6 +93,7 @@ export const fetchChannelInfo = async (identifier: string, apiKey: string): Prom
     handle: item.snippet.customUrl,
     thumbnail: item.snippet.thumbnails.default.url,
     uploadsPlaylistId: item.contentDetails.relatedPlaylists.uploads,
+    subscriberCount: item.statistics.subscriberCount || '0',
   };
 };
 
