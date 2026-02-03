@@ -60,6 +60,8 @@ const App: React.FC = () => {
     const shareData = params.get('share');
     if (shareData) {
       try {
+        // [수정] URL 안전 문자로 인코딩된 데이터를 다시 디코딩 후 파싱
+        // params.get()이 이미 1차 디코딩을 수행하지만, Base64 과정의 UTF-8 처리를 위해 표준 로직 사용
         const jsonStr = decodeURIComponent(escape(window.atob(shareData)));
         const data = JSON.parse(jsonStr);
         if (data.apiKey && !CONST_API_KEY) initialApiKey = data.apiKey;
@@ -91,18 +93,23 @@ const App: React.FC = () => {
     // URL 업데이트 (주소창 복사 지원을 위해)
     if (channels.length > 0) {
         try {
-            // API 키가 코드에 하드코딩 되어 있다면 URL에는 포함시키지 않음 (보안 및 길이 최적화)
             const shareData: any = { channels, folders };
             if (!CONST_API_KEY && apiKey) {
                 shareData.apiKey = apiKey;
             }
 
             const jsonStr = JSON.stringify(shareData);
+            // UTF-8 지원 Base64 인코딩
             const b64 = window.btoa(unescape(encodeURIComponent(jsonStr)));
-            const newUrl = `${window.location.pathname}?share=${b64}`;
             
-            // 현재 상태와 URL이 다를 때만 업데이트
-            if (window.location.search !== `?share=${b64}`) {
+            // [중요] URL에 넣을 때 +, /, = 문자가 깨지지 않도록 한 번 더 인코딩
+            // URLSearchParams를 쓰지 않고 직접 문자열을 만들 때는 encodeURIComponent가 필수입니다.
+            const urlSafeB64 = encodeURIComponent(b64);
+            const newUrl = `${window.location.pathname}?share=${urlSafeB64}`;
+            
+            // 현재 주소와 다를 때만 업데이트
+            // location.search는 디코딩된 값을 보여줄 수 있으므로 원본 문자열 비교가 안전
+            if (!window.location.search.includes(urlSafeB64)) {
                 window.history.replaceState({}, '', newUrl);
             }
         } catch (e) {
