@@ -17,6 +17,7 @@ interface SidebarProps {
   deleteChannel: (id: string) => void;
   moveChannel: (channelId: string, folderId: string) => void;
   refreshData: () => void;
+  getShareLink: () => string; // 공유 링크 생성 함수
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -32,12 +33,14 @@ const Sidebar: React.FC<SidebarProps> = ({
   addChannel,
   deleteChannel,
   moveChannel,
-  refreshData
+  refreshData,
+  getShareLink
 }) => {
   const [newFolderInput, setNewFolderInput] = useState('');
   const [newChannelInput, setNewChannelInput] = useState('');
   const [isAddingChannel, setIsAddingChannel] = useState(false);
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
+  const [isSharing, setIsSharing] = useState(false);
 
   const handleAddFolder = (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,15 +64,37 @@ const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  const handleShareConfig = () => {
-    // App.tsx에서 이미 URL을 압축하여 최적화하고 있으므로, 현재 주소를 그대로 복사합니다.
-    const shareUrl = window.location.href;
-    navigator.clipboard.writeText(shareUrl).then(() => {
-        alert("✅ 공유용 짧은 링크가 복사되었습니다!");
-    }).catch(err => {
-        console.error('Clipboard failed', err);
-        prompt("아래 링크를 복사하세요:", shareUrl);
-    });
+  const handleShareConfig = async () => {
+    setIsSharing(true);
+    const longUrl = getShareLink();
+    
+    // 1. 먼저 긴 URL을 클립보드에 복사해둡니다 (실패 대비)
+    try {
+        await navigator.clipboard.writeText(longUrl);
+    } catch(e) { /* ignore */ }
+
+    // 2. 무료 단축 URL API 시도 (TinyURL)
+    // 주의: CORS 문제로 브라우저에 따라 막힐 수 있음
+    try {
+        const response = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(longUrl)}`);
+        if (response.ok) {
+            const shortUrl = await response.text();
+            await navigator.clipboard.writeText(shortUrl);
+            alert(`✅ 단축 URL이 복사되었습니다!\n\n${shortUrl}`);
+            setIsSharing(false);
+            return;
+        }
+    } catch (e) {
+        console.warn("URL shortening failed, using long URL", e);
+    }
+
+    // 3. 단축 실패 시 긴 URL 사용 안내
+    alert(
+        "✅ 공유 링크가 복사되었습니다!\n\n" +
+        "서버가 없는 앱이라 데이터가 포함되어 링크가 다소 깁니다.\n" +
+        "하지만 데이터베이스 없이도 영구적으로 작동하는 안전한 링크입니다."
+    );
+    setIsSharing(false);
   };
 
   const handleDragStart = (e: React.DragEvent, channelId: string) => {
@@ -221,10 +246,15 @@ const Sidebar: React.FC<SidebarProps> = ({
       <div className="p-4 border-t border-slate-100 space-y-2">
           <button 
               onClick={handleShareConfig}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors font-bold text-xs"
+              disabled={isSharing}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors font-bold text-xs disabled:opacity-50"
           >
-              <Share2 size={14} />
-              팀원에게 대시보드 공유
+              {isSharing ? (
+                  <div className="w-3 h-3 border-2 border-slate-400 border-t-slate-700 rounded-full animate-spin" />
+              ) : (
+                  <Share2 size={14} />
+              )}
+              {isSharing ? "링크 생성 중..." : "팀원에게 대시보드 공유"}
           </button>
           <div className="flex items-center justify-center gap-4 text-[10px] text-slate-400">
               <a href="https://console.cloud.google.com/apis/enabled/youtube.googleapis.com/quotas" target="_blank" className="hover:text-blue-600 flex items-center gap-1">

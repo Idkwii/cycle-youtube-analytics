@@ -61,10 +61,8 @@ const App: React.FC = () => {
     const shareData = params.get('share');
     if (shareData) {
       try {
-        // 1. LZString 압축 해제 시도 (신규 방식)
         let jsonStr = LZString.decompressFromEncodedURIComponent(shareData);
         
-        // 2. 실패 시 기존 Base64 방식 시도 (구버전 호환)
         if (!jsonStr) {
             try {
                 jsonStr = decodeURIComponent(escape(window.atob(shareData)));
@@ -73,9 +71,6 @@ const App: React.FC = () => {
 
         if (jsonStr) {
             const data = JSON.parse(jsonStr);
-            
-            // 데이터 포맷 확인 (압축된 최소화 포맷인지, 일반 JSON인지)
-            // 최소화 포맷: { k: key, f: [[id,name]...], c: [[id,fid,title]...] }
             if (data.c && Array.isArray(data.c)) {
                 if (data.k && !CONST_API_KEY) initialApiKey = data.k;
                 if (data.f) {
@@ -85,18 +80,20 @@ const App: React.FC = () => {
                     id: c[0],
                     folderId: c[1],
                     title: c[2],
-                    // 썸네일과 플레이리스트ID는 공유 시 제거되므로 복구
                     thumbnail: '', 
                     uploadsPlaylistId: c[0].replace(/^UC/, 'UU'),
                     handle: ''
                 }));
             } else {
-                // 기존 포맷
                 if (data.apiKey && !CONST_API_KEY) initialApiKey = data.apiKey;
                 if (data.channels) initialChannels = data.channels;
                 if (data.folders) initialFolders = data.folders;
             }
         }
+        
+        // [핵심] 데이터를 다 로드했으면, URL을 깨끗하게 청소합니다! (사용자가 긴 URL을 보지 않게 함)
+        window.history.replaceState({}, '', window.location.pathname);
+        
       } catch (e) {
         console.error("Failed to parse shared data", e);
       }
@@ -115,41 +112,31 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // 2. 상태 변경 시 URL 및 로컬 스토리지 동기화
+  // 2. 상태 변경 시 로컬 스토리지만 동기화 (URL 자동 업데이트 제거)
   useEffect(() => {
-    // 로컬 스토리지 저장
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ apiKey, channels, folders, period }));
-
-    // URL 업데이트 (주소창 복사 지원을 위해)
-    if (channels.length > 0) {
-        try {
-            // 데이터 최소화 (Minification)
-            // { k: key, f: [[id,name]], c: [[id,folderId,title]] }
-            const minifiedData: any = {
-                f: folders.map(f => [f.id, f.name]),
-                c: channels.map(c => [c.id, c.folderId, c.title])
-            };
-            
-            if (!CONST_API_KEY && apiKey) {
-                minifiedData.k = apiKey;
-            }
-
-            const jsonStr = JSON.stringify(minifiedData);
-            // LZString 압축
-            const compressed = LZString.compressToEncodedURIComponent(jsonStr);
-            
-            const newUrl = `${window.location.pathname}?share=${compressed}`;
-            
-            // 현재 주소와 다를 때만 업데이트
-            const currentShare = new URLSearchParams(window.location.search).get('share');
-            if (currentShare !== compressed) {
-                window.history.replaceState({}, '', newUrl);
-            }
-        } catch (e) {
-            console.error("URL update failed", e);
-        }
-    }
   }, [apiKey, channels, folders, period]);
+
+  // 공유 링크 생성 함수 (Sidebar로 전달)
+  const getShareLink = useCallback(() => {
+     try {
+        const minifiedData: any = {
+            f: folders.map(f => [f.id, f.name]),
+            c: channels.map(c => [c.id, c.folderId, c.title])
+        };
+        
+        if (!CONST_API_KEY && apiKey) {
+            minifiedData.k = apiKey;
+        }
+
+        const jsonStr = JSON.stringify(minifiedData);
+        const compressed = LZString.compressToEncodedURIComponent(jsonStr);
+        return `${window.location.origin}${window.location.pathname}?share=${compressed}`;
+    } catch (e) {
+        console.error("Link generation failed", e);
+        return window.location.href;
+    }
+  }, [folders, channels, apiKey]);
 
   // 영상 데이터 캐시 저장
   useEffect(() => {
@@ -243,6 +230,7 @@ const App: React.FC = () => {
         addFolder={addFolder} addChannel={addChannel}
         deleteChannel={deleteChannel} moveChannel={moveChannel}
         refreshData={() => refreshData(undefined, true)}
+        getShareLink={getShareLink}
       />
       <main className="flex-1 ml-80 overflow-y-auto">
         <Dashboard 
