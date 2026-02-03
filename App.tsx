@@ -69,7 +69,8 @@ const App: React.FC = () => {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isAnalyticsLoading, setIsAnalyticsLoading] = useState(false);
   
-  // Toast State
+  // UI State
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const showToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
@@ -103,7 +104,7 @@ const App: React.FC = () => {
   const handleLogin = () => {
     if (!oauthClientId || oauthClientId.includes('YOUR_CLIENT_ID')) {
         showToast("설정에서 OAuth Client ID를 입력해주세요.", 'error');
-        // 설정 메뉴를 열도록 유도하면 좋겠지만, 일단 메시지로 안내
+        setIsSettingsOpen(true); // Open settings automatically if missing
         return;
     }
     // @ts-ignore
@@ -118,7 +119,7 @@ const App: React.FC = () => {
             }
         },
     });
-    client.requestAccessToken();
+    client?.requestAccessToken();
   };
 
   const loadMyAnalytics = async (token: string) => {
@@ -280,6 +281,7 @@ const App: React.FC = () => {
   const addChannel = async (identifier: string, folderId: string) => {
     if (!apiKey) {
       showToast("코드 내부에 API 키가 설정되지 않았습니다.", 'error');
+      setIsSettingsOpen(true);
       return;
     }
     setIsLoading(true);
@@ -344,7 +346,6 @@ const App: React.FC = () => {
                 folders={folders} isLoading={isLoading}
                 period={period} setPeriod={setPeriod}
                 apiKey={apiKey} setApiKey={setApiKey}
-                oauthClientId={oauthClientId} setOauthClientId={setOauthClientId} // NEW
             />
         ) : (
             <div className="relative h-full">
@@ -379,6 +380,49 @@ const App: React.FC = () => {
             </div>
         )}
       </main>
+      
+      {/* Global Settings UI */}
+      <div className="fixed bottom-4 right-8 flex flex-col items-end z-50">
+          {isSettingsOpen && (
+              <div className="bg-white p-4 rounded-2xl shadow-2xl border border-slate-200 mb-2 w-80 animate-in slide-in-from-bottom-4">
+                  <div className="flex justify-between items-center mb-2">
+                      <p className="text-xs font-bold text-slate-900">설정 및 API 키 관리</p>
+                      <button onClick={() => setIsSettingsOpen(false)} className="text-slate-400 hover:text-slate-600">✕</button>
+                  </div>
+                  
+                  <div className="space-y-3">
+                      <div>
+                          <label className="text-[10px] font-bold text-slate-500 mb-1 block">YouTube Data API Key (Public)</label>
+                          <input 
+                              type="password" 
+                              value={apiKey} 
+                              onChange={(e) => setApiKey(e.target.value)}
+                              placeholder="AIza..."
+                              className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none"
+                          />
+                      </div>
+                      
+                      <div>
+                          <label className="text-[10px] font-bold text-slate-500 mb-1 block">OAuth 2.0 Client ID (Private)</label>
+                          <input 
+                              type="text" 
+                              value={oauthClientId || ''} 
+                              onChange={(e) => setOauthClientId(e.target.value)}
+                              placeholder="...apps.googleusercontent.com"
+                              className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none"
+                          />
+                      </div>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-2">변경 시 자동 저장 및 즉시 반영됩니다.</p>
+              </div>
+          )}
+          <button 
+              onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+              className={`p-3 rounded-full shadow-md border transition-colors ${isSettingsOpen ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-300 hover:text-slate-600 border-slate-100'}`}
+          >
+              <Settings size={20} />
+          </button>
+      </div>
 
       <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 flex flex-col gap-2 z-50 pointer-events-none">
         {toasts.map(toast => (

@@ -17,8 +17,6 @@ interface DashboardProps {
   setPeriod: (period: AnalysisPeriod) => void;
   apiKey: string;
   setApiKey: (key: string) => void;
-  oauthClientId?: string;
-  setOauthClientId?: (id: string) => void;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ 
@@ -31,12 +29,9 @@ const Dashboard: React.FC<DashboardProps> = ({
     period,
     setPeriod,
     apiKey,
-    setApiKey,
-    oauthClientId,
-    setOauthClientId
+    setApiKey
 }) => {
   const [sortOption, setSortOption] = useState<SortOption>(SortOption.VIEWS_DESC);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const scopeVideos = useMemo(() => {
     if (selectedChannelId) {
@@ -126,49 +121,7 @@ const Dashboard: React.FC<DashboardProps> = ({
 
               <div className="mt-20 opacity-30 flex flex-col items-center">
                   <Settings size={20} className="mb-2" />
-                  <p className="text-[10px] text-slate-400">관리자용 설정은 우측 하단에 숨겨져 있습니다.</p>
-              </div>
-
-              {/* 비밀 설정 아이콘 유지 */}
-              <div className="fixed bottom-4 right-8 flex flex-col items-end z-50">
-                {isSettingsOpen && (
-                    <div className="bg-white p-4 rounded-2xl shadow-2xl border border-slate-200 mb-2 w-80 animate-in slide-in-from-bottom-4">
-                        <p className="text-xs font-bold text-slate-900 mb-2">설정 및 API 키 관리</p>
-                        
-                        <div className="space-y-3">
-                            <div>
-                                <label className="text-[10px] font-bold text-slate-500 mb-1 block">YouTube Data API Key (Public)</label>
-                                <input 
-                                    type="password" 
-                                    value={apiKey} 
-                                    onChange={(e) => setApiKey(e.target.value)}
-                                    placeholder="AIza..."
-                                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none"
-                                />
-                            </div>
-                            
-                            {setOauthClientId && (
-                                <div>
-                                    <label className="text-[10px] font-bold text-slate-500 mb-1 block">OAuth 2.0 Client ID (Private)</label>
-                                    <input 
-                                        type="text" 
-                                        value={oauthClientId || ''} 
-                                        onChange={(e) => setOauthClientId(e.target.value)}
-                                        placeholder="...apps.googleusercontent.com"
-                                        className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none"
-                                    />
-                                </div>
-                            )}
-                        </div>
-                        <p className="text-[10px] text-slate-400 mt-2">변경 시 자동 저장 및 즉시 반영됩니다.</p>
-                    </div>
-                )}
-                <button 
-                    onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-                    className="p-3 bg-white text-slate-300 hover:text-slate-600 rounded-full shadow-md border border-slate-100 transition-colors"
-                >
-                    <Settings size={20} />
-                </button>
+                  <p className="text-[10px] text-slate-400">우측 하단의 설정 버튼을 눌러 API 키를 관리하세요.</p>
               </div>
           </div>
       );
@@ -251,48 +204,6 @@ const Dashboard: React.FC<DashboardProps> = ({
         avgViews={stats.avgViews} 
       />
       
-      {/* 관리자용 비밀 설정창 */}
-      <div className="fixed bottom-4 right-8 flex flex-col items-end z-50">
-          {isSettingsOpen && (
-              <div className="bg-white p-4 rounded-2xl shadow-2xl border border-slate-200 mb-2 w-80 animate-in slide-in-from-bottom-4">
-                  <p className="text-xs font-bold text-slate-900 mb-2">설정 및 API 키 관리</p>
-                  
-                  <div className="space-y-3">
-                      <div>
-                          <label className="text-[10px] font-bold text-slate-500 mb-1 block">YouTube Data API Key (Public)</label>
-                          <input 
-                              type="password" 
-                              value={apiKey} 
-                              onChange={(e) => setApiKey(e.target.value)}
-                              placeholder="AIza..."
-                              className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none"
-                          />
-                      </div>
-                      
-                      {setOauthClientId && (
-                          <div>
-                              <label className="text-[10px] font-bold text-slate-500 mb-1 block">OAuth 2.0 Client ID (Private)</label>
-                              <input 
-                                  type="text" 
-                                  value={oauthClientId || ''} 
-                                  onChange={(e) => setOauthClientId(e.target.value)}
-                                  placeholder="...apps.googleusercontent.com"
-                                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none"
-                              />
-                          </div>
-                      )}
-                  </div>
-                  <p className="text-[10px] text-slate-400 mt-2">변경 시 자동 저장 및 즉시 반영됩니다.</p>
-              </div>
-          )}
-          <button 
-              onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-              className="p-3 bg-white text-slate-400 hover:text-slate-600 rounded-full shadow-md border border-slate-100 transition-colors"
-          >
-              <Settings size={20} />
-          </button>
-      </div>
-
       {isLoading && (
           <div className="fixed inset-0 bg-white/50 backdrop-blur-sm z-50 flex items-center justify-center">
               <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
