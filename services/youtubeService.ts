@@ -1,7 +1,8 @@
 
-import { Channel, Video } from '../types';
+import { Channel, Video, AnalyticsDataPoint } from '../types';
 
 const BASE_URL = 'https://www.googleapis.com/youtube/v3';
+const ANALYTICS_BASE_URL = 'https://youtubeanalytics.googleapis.com/v2';
 
 const parseDuration = (duration: string): number => {
   const match = duration.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
@@ -26,6 +27,8 @@ const handleApiError = async (response: Response) => {
     throw new Error(message);
   }
 };
+
+// --- 기존 Data API (Public) ---
 
 export const fetchChannelInfo = async (identifier: string, apiKey: string): Promise<Omit<Channel, 'folderId'>> => {
   const cleanId = identifier.trim();
@@ -163,4 +166,46 @@ export const fetchRecentVideos = async (channels: Channel[], apiKey: string, day
   }
 
   return finalVideos;
+};
+
+// --- Analytics API (Private / OAuth Required) ---
+
+export const fetchAnalyticsReport = async (accessToken: string, days: number = 30): Promise<AnalyticsDataPoint[]> => {
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(endDate.getDate() - days);
+
+    const formatDate = (date: Date) => date.toISOString().split('T')[0];
+
+    // metrics: views, estimatedMinutesWatched, averageViewDuration, subscribersGained, estimatedRevenue
+    // dimensions: day
+    // sort: day
+    const metrics = 'views,estimatedMinutesWatched,averageViewDuration,subscribersGained,estimatedRevenue';
+    const url = `${ANALYTICS_BASE_URL}/reports?ids=channel==MINE&startDate=${formatDate(startDate)}&endDate=${formatDate(endDate)}&metrics=${metrics}&dimensions=day&sort=day`;
+
+    const res = await fetch(url, {
+        headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Accept': 'application/json'
+        }
+    });
+
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error?.message || "Analytics API Error");
+    }
+
+    const data = await res.json();
+    
+    // Response format: { columnHeaders: [...], rows: [[...], [...]] }
+    if (!data.rows) return [];
+
+    return data.rows.map((row: any[]) => ({
+        date: row[0],
+        views: row[1],
+        estimatedMinutesWatched: row[2],
+        averageViewDuration: row[3],
+        subscribersGained: row[4],
+        estimatedRevenue: row[5]
+    }));
 };

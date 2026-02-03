@@ -1,3 +1,4 @@
+
 export interface Channel {
   id: string;
   title: string;
@@ -48,4 +49,22 @@ export enum SortOption {
   COMMENTS_ASC = 'COMMENTS_ASC',
   DATE_DESC = 'DATE_DESC',
   DATE_ASC = 'DATE_ASC'
+}
+
+// --- Analytics API Types ---
+
+export interface AnalyticsDataPoint {
+  date: string;
+  views: number;
+  estimatedMinutesWatched: number;
+  averageViewDuration: number;
+  subscribersGained: number;
+  estimatedRevenue: number;
+}
+
+export interface AnalyticsSummary {
+  totalViews: number;
+  totalRevenue: number;
+  totalSubscribersGained: number;
+  totalWatchTimeHours: number;
 }

@@ -2,8 +2,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
-import { Channel, Folder, Video, AnalysisPeriod } from './types';
-import { fetchChannelInfo, fetchRecentVideos } from './services/youtubeService';
+import MyAnalyticsDashboard from './components/MyAnalyticsDashboard'; // New Component
+import { Channel, Folder, Video, AnalysisPeriod, AnalyticsDataPoint } from './types';
+import { fetchChannelInfo, fetchRecentVideos, fetchAnalyticsReport } from './services/youtubeService';
 import LZString from 'lz-string';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 
@@ -14,7 +15,14 @@ const VIDEO_CACHE_KEY = 'yt_dashboard_videos';
  * [중요] 여기에 본인의 YouTube Data API v3 키를 입력하세요.
  * 여기에 입력하면 공유받은 모든 사람이 별도의 입력 없이 바로 결과를 볼 수 있습니다.
  */
-const CONST_API_KEY = 'AIzaSyA3JRkSp_eMJ3oWKhqDwIbY5IVbb99Uobc'; // <-- 여기에 'AIza...'로 시작하는 키를 입력하세요.
+const CONST_API_KEY = 'AIzaSyA3JRkSp_eMJ3oWKhqDwIbY5IVbb99Uobc'; 
+
+/**
+ * [필수] 내 채널 분석을 위해 필요한 OAuth 2.0 Client ID입니다.
+ * Google Cloud Console > API 및 서비스 > 사용자 인증 정보 > OAuth 2.0 클라이언트 ID 만들기
+ * (애플리케이션 유형: 웹 애플리케이션, 승인된 자바스크립트 원본: http://localhost:5173 등)
+ */
+const OAUTH_CLIENT_ID = 'YOUR_CLIENT_ID_HERE.apps.googleusercontent.com'; // <--- 여기에 Client ID 입력 필수
 
 const getInitialApiKey = () => {
   if (CONST_API_KEY) return CONST_API_KEY;
@@ -26,7 +34,6 @@ const getInitialApiKey = () => {
   }
 };
 
-// 토스트 메시지 타입 정의
 interface Toast {
   id: number;
   message: string;
@@ -42,10 +49,18 @@ const App: React.FC = () => {
   const [lastFetched, setLastFetched] = useState<number | null>(null);
   const [dataPeriod, setDataPeriod] = useState<AnalysisPeriod | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  
+  // Navigation State
+  const [currentView, setCurrentView] = useState<'DASHBOARD' | 'MY_ANALYTICS'>('DASHBOARD');
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
+
+  // My Analytics State
+  const [analyticsData, setAnalyticsData] = useState<AnalyticsDataPoint[]>([]);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [isAnalyticsLoading, setIsAnalyticsLoading] = useState(false);
   
-  // 토스트 상태 관리
+  // Toast State
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const showToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
@@ -56,7 +71,61 @@ const App: React.FC = () => {
     }, 3000);
   }, []);
 
-  // 1. 초기화: 로컬 스토리지 및 URL 공유 파라미터 확인
+  // --- Google OAuth Init ---
+  useEffect(() => {
+    // @ts-ignore
+    if (window.google && OAUTH_CLIENT_ID && !OAUTH_CLIENT_ID.includes('YOUR_CLIENT_ID')) {
+        // @ts-ignore
+        window.google.accounts.oauth2.initTokenClient({
+            client_id: OAUTH_CLIENT_ID,
+            scope: 'https://www.googleapis.com/auth/yt-analytics.readonly https://www.googleapis.com/auth/youtube.readonly',
+            callback: (response: any) => {
+                if (response.access_token) {
+                    setAccessToken(response.access_token);
+                    loadMyAnalytics(response.access_token);
+                } else {
+                    showToast("로그인 실패", 'error');
+                }
+            },
+        });
+    }
+  }, [showToast]);
+
+  const handleLogin = () => {
+    if (!OAUTH_CLIENT_ID || OAUTH_CLIENT_ID.includes('YOUR_CLIENT_ID')) {
+        showToast("코드에 OAuth Client ID를 설정해야 합니다.", 'error');
+        return;
+    }
+    // @ts-ignore
+    const client = window.google?.accounts?.oauth2?.initTokenClient({
+        client_id: OAUTH_CLIENT_ID,
+        scope: 'https://www.googleapis.com/auth/yt-analytics.readonly https://www.googleapis.com/auth/youtube.readonly',
+        callback: (response: any) => {
+            if (response.access_token) {
+                setAccessToken(response.access_token);
+                loadMyAnalytics(response.access_token);
+                setCurrentView('MY_ANALYTICS');
+            }
+        },
+    });
+    client.requestAccessToken();
+  };
+
+  const loadMyAnalytics = async (token: string) => {
+      setIsAnalyticsLoading(true);
+      try {
+          const data = await fetchAnalyticsReport(token, period);
+          setAnalyticsData(data);
+          showToast("내 채널 분석 데이터를 불러왔습니다.", 'success');
+      } catch (e: any) {
+          console.error(e);
+          showToast(e.message, 'error');
+      } finally {
+          setIsAnalyticsLoading(false);
+      }
+  };
+
+  // 1. 초기화 Logic (기존 유지)
   useEffect(() => {
     const savedState = localStorage.getItem(STORAGE_KEY);
     const savedVideos = localStorage.getItem(VIDEO_CACHE_KEY);
@@ -67,7 +136,6 @@ const App: React.FC = () => {
     let initialPeriod: AnalysisPeriod = 30;
     let dataLoadedFromShare = false;
 
-    // 로컬 스토리지 로드
     if (savedState) {
       const parsed = JSON.parse(savedState);
       initialApiKey = CONST_API_KEY || parsed.apiKey || initialApiKey;
@@ -76,19 +144,16 @@ const App: React.FC = () => {
       initialPeriod = parsed.period || 30;
     }
 
-    // URL 파라미터(공유 데이터) 로드
     const params = new URLSearchParams(window.location.search);
     const shareData = params.get('share');
     if (shareData) {
       try {
         let jsonStr = LZString.decompressFromEncodedURIComponent(shareData);
-        
         if (!jsonStr) {
             try {
                 jsonStr = decodeURIComponent(escape(window.atob(shareData)));
             } catch (e) { /* ignore */ }
         }
-
         if (jsonStr) {
             const data = JSON.parse(jsonStr);
             if (data.c && Array.isArray(data.c)) {
@@ -111,10 +176,7 @@ const App: React.FC = () => {
             }
             dataLoadedFromShare = true;
         }
-        
-        // [핵심] URL 세탁 (Clean URL)
         window.history.replaceState({}, '', window.location.pathname);
-        
       } catch (e) {
         console.error("Failed to parse shared data", e);
       }
@@ -132,14 +194,11 @@ const App: React.FC = () => {
       setDataPeriod(parsed.period || null);
     }
 
-    // 공유된 데이터로 로드되었음을 알림
     if (dataLoadedFromShare) {
-        // UI 렌더링 후 알림을 띄우기 위해 약간의 지연
         setTimeout(() => showToast("공유된 대시보드 설정을 불러왔습니다.", 'success'), 500);
     }
   }, [showToast]);
 
-  // 2. 상태 변경 시 로컬 스토리지만 동기화
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ apiKey, channels, folders, period }));
   }, [apiKey, channels, folders, period]);
@@ -150,21 +209,17 @@ const App: React.FC = () => {
             f: folders.map(f => [f.id, f.name]),
             c: channels.map(c => [c.id, c.folderId, c.title])
         };
-        
         if (!CONST_API_KEY && apiKey) {
             minifiedData.k = apiKey;
         }
-
         const jsonStr = JSON.stringify(minifiedData);
         const compressed = LZString.compressToEncodedURIComponent(jsonStr);
         return `${window.location.origin}${window.location.pathname}?share=${compressed}`;
     } catch (e) {
-        console.error("Link generation failed", e);
         return window.location.href;
     }
   }, [folders, channels, apiKey]);
 
-  // 영상 데이터 캐시 저장
   useEffect(() => {
     if (videos.length > 0) {
       localStorage.setItem(VIDEO_CACHE_KEY, JSON.stringify({ 
@@ -189,7 +244,6 @@ const App: React.FC = () => {
       setLastFetched(Date.now());
       showToast("데이터 업데이트 완료", 'success');
     } catch (error: any) {
-      console.error(error.message);
       showToast("데이터 업데이트 실패: " + error.message, 'error');
     } finally {
       setIsLoading(false);
@@ -197,12 +251,14 @@ const App: React.FC = () => {
   }, [apiKey, channels, period, lastFetched, showToast]);
 
   useEffect(() => {
-    if (apiKey && channels.length > 0) {
+    if (currentView === 'DASHBOARD' && apiKey && channels.length > 0) {
       if (dataPeriod !== period || !lastFetched) {
         refreshData(period);
       }
+    } else if (currentView === 'MY_ANALYTICS' && accessToken) {
+        loadMyAnalytics(accessToken);
     }
-  }, [apiKey, channels, period, dataPeriod, lastFetched, refreshData]);
+  }, [apiKey, channels, period, dataPeriod, lastFetched, refreshData, currentView, accessToken]);
 
   const addFolder = (name: string) => {
     setFolders([...folders, { id: `f-${Date.now()}`, name }]);
@@ -254,27 +310,58 @@ const App: React.FC = () => {
         apiKey={apiKey} setApiKey={setApiKey}
         folders={folders} channels={channels}
         selectedFolderId={selectedFolderId}
-        setSelectedFolderId={(id) => { setSelectedFolderId(id); setSelectedChannelId(null); }}
+        setSelectedFolderId={(id) => { setSelectedFolderId(id); setSelectedChannelId(null); setCurrentView('DASHBOARD'); }}
         selectedChannelId={selectedChannelId}
-        setSelectedChannelId={setSelectedChannelId}
+        setSelectedChannelId={(id) => { setSelectedChannelId(id); if(id) setCurrentView('DASHBOARD'); }}
         addFolder={addFolder} addChannel={addChannel}
         deleteChannel={deleteChannel} moveChannel={moveChannel}
         refreshData={() => refreshData(undefined, true)}
         getShareLink={getShareLink}
         showToast={showToast}
+        onLoginClick={handleLogin} // NEW
+        currentView={currentView} // NEW
+        setCurrentView={setCurrentView} // NEW
       />
       <main className="flex-1 ml-80 overflow-y-auto">
-        <Dashboard 
-          videos={videos} channels={channels}
-          selectedFolderId={selectedFolderId}
-          selectedChannelId={selectedChannelId}
-          folders={folders} isLoading={isLoading}
-          period={period} setPeriod={setPeriod}
-          apiKey={apiKey} setApiKey={setApiKey}
-        />
+        {currentView === 'DASHBOARD' ? (
+            <Dashboard 
+                videos={videos} channels={channels}
+                selectedFolderId={selectedFolderId}
+                selectedChannelId={selectedChannelId}
+                folders={folders} isLoading={isLoading}
+                period={period} setPeriod={setPeriod}
+                apiKey={apiKey} setApiKey={setApiKey}
+            />
+        ) : (
+            <div className="relative h-full">
+                {isAnalyticsLoading && (
+                    <div className="absolute inset-0 bg-white/50 z-10 flex items-center justify-center backdrop-blur-sm">
+                        <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
+                    </div>
+                )}
+                {!accessToken ? (
+                    <div className="flex flex-col items-center justify-center h-full gap-4">
+                         <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center">
+                            <CheckCircle2 size={32} />
+                        </div>
+                        <h2 className="text-xl font-bold">내 채널 분석을 위해 로그인이 필요합니다</h2>
+                        <button 
+                            onClick={handleLogin}
+                            className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors shadow-lg"
+                        >
+                            구글 계정으로 로그인
+                        </button>
+                        <p className="text-sm text-slate-400 max-w-sm text-center">
+                            * 수익, 구독자 증감 등 민감한 데이터는<br/>본인 인증 후에만 볼 수 있습니다.
+                        </p>
+                    </div>
+                ) : (
+                    <MyAnalyticsDashboard data={analyticsData} period={period} />
+                )}
+            </div>
+        )}
       </main>
 
-      {/* Toast Notification Container */}
       <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 flex flex-col gap-2 z-50 pointer-events-none">
         {toasts.map(toast => (
             <div 
