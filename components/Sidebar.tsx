@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Folder, Channel } from '../types';
-import { Plus, Trash2, FolderPlus, Youtube, RefreshCw, Folder as FolderIcon, GripVertical, ChevronRight, ChevronDown, Share2, BarChart3, ExternalLink, LineChart } from 'lucide-react';
+import { Plus, Trash2, FolderPlus, Youtube, RefreshCw, Folder as FolderIcon, GripVertical, ChevronRight, ChevronDown, Share2, BarChart3, ExternalLink } from 'lucide-react';
 
 interface SidebarProps {
   apiKey: string;
@@ -19,9 +19,6 @@ interface SidebarProps {
   refreshData: () => void;
   getShareLink: () => string;
   showToast: (msg: string, type?: 'success' | 'error') => void;
-  onLoginClick?: () => void;
-  currentView?: 'DASHBOARD' | 'MY_ANALYTICS';
-  setCurrentView?: (view: 'DASHBOARD' | 'MY_ANALYTICS') => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -38,10 +35,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   moveChannel,
   refreshData,
   getShareLink,
-  showToast,
-  onLoginClick,
-  currentView,
-  setCurrentView
+  showToast
 }) => {
   const [newFolderInput, setNewFolderInput] = useState('');
   const [newChannelInput, setNewChannelInput] = useState('');
@@ -123,32 +117,6 @@ const Sidebar: React.FC<SidebarProps> = ({
           <h1 className="font-bold text-lg tracking-tight text-slate-900 leading-tight">Cycle Youtube<br/>Analytics</h1>
         </div>
         
-        <div className="space-y-2 mb-6">
-            <button
-                onClick={() => setCurrentView?.('DASHBOARD')}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-all ${
-                    currentView === 'DASHBOARD' ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:bg-slate-50'
-                }`}
-            >
-                <FolderIcon size={18} />
-                경쟁사 분석 (Public)
-            </button>
-            <button
-                onClick={() => {
-                    setCurrentView?.('MY_ANALYTICS');
-                    if (onLoginClick && currentView !== 'MY_ANALYTICS') {
-                        // Optional: Auto login trigger if needed
-                    }
-                }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-all ${
-                    currentView === 'MY_ANALYTICS' ? 'bg-red-50 text-red-600' : 'text-slate-500 hover:bg-slate-50'
-                }`}
-            >
-                <LineChart size={18} />
-                내 채널 분석 (Private)
-            </button>
-        </div>
-
         <button
             onClick={refreshData}
             disabled={!apiKey}
@@ -206,12 +174,12 @@ const Sidebar: React.FC<SidebarProps> = ({
             <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 px-1 text-[10px]">채널 리스트</h2>
             <div className="space-y-2">
                 <button
-                    onClick={() => { setSelectedFolderId(null); setSelectedChannelId(null); setCurrentView?.('DASHBOARD'); }}
+                    onClick={() => { setSelectedFolderId(null); setSelectedChannelId(null); }}
                     className={`w-full text-left px-3 py-3 rounded-lg text-sm font-bold flex items-center gap-3 transition-colors ${
-                        selectedFolderId === null && currentView === 'DASHBOARD' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-700 hover:bg-slate-100 bg-white border border-slate-100'
+                        selectedFolderId === null ? 'bg-blue-600 text-white shadow-md' : 'text-slate-700 hover:bg-slate-100 bg-white border border-slate-100'
                     }`}
                 >
-                    <FolderIcon size={18} className={(selectedFolderId === null && currentView === 'DASHBOARD') ? "text-blue-200" : "text-slate-400"} />
+                    <FolderIcon size={18} className={selectedFolderId === null ? "text-blue-200" : "text-slate-400"} />
                     <span>전체 보기</span>
                 </button>
 
@@ -223,7 +191,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                             <button
                                 onClick={() => {
                                     setSelectedFolderId(isFolderSelected ? null : folder.id);
-                                    if(!isFolderSelected) setCurrentView?.('DASHBOARD');
                                 }}
                                 onDragOver={(e) => handleDragOver(e, folder.id)}
                                 onDrop={(e) => handleDrop(e, folder.id)}
@@ -242,7 +209,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                                     {folderChannels.map(channel => (
                                         <div 
                                             key={channel.id} 
-                                            onClick={(e) => { e.stopPropagation(); setSelectedChannelId(channel.id); setCurrentView?.('DASHBOARD'); }}
+                                            onClick={(e) => { e.stopPropagation(); setSelectedChannelId(channel.id); }}
                                             draggable={true}
                                             onDragStart={(e) => handleDragStart(e, channel.id)}
                                             className={`group flex items-center gap-3 p-2 rounded-lg cursor-pointer border transition-all ${

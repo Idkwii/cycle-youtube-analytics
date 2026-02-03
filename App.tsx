@@ -2,9 +2,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
-import MyAnalyticsDashboard from './components/MyAnalyticsDashboard'; // New Component
-import { Channel, Folder, Video, AnalysisPeriod, AnalyticsDataPoint } from './types';
-import { fetchChannelInfo, fetchRecentVideos, fetchAnalyticsReport } from './services/youtubeService';
+import { Channel, Folder, Video, AnalysisPeriod } from './types';
+import { fetchChannelInfo, fetchRecentVideos } from './services/youtubeService';
 import LZString from 'lz-string';
 import { CheckCircle2, AlertCircle, Settings } from 'lucide-react';
 
@@ -17,11 +16,6 @@ const VIDEO_CACHE_KEY = 'yt_dashboard_videos';
  */
 const CONST_API_KEY = 'AIzaSyA3JRkSp_eMJ3oWKhqDwIbY5IVbb99Uobc'; 
 
-/**
- * [필수] 내 채널 분석을 위해 필요한 OAuth 2.0 Client ID입니다.
- */
-const DEFAULT_OAUTH_CLIENT_ID = 'YOUR_CLIENT_ID_HERE.apps.googleusercontent.com';
-
 const getInitialApiKey = () => {
   if (CONST_API_KEY) return CONST_API_KEY;
   try {
@@ -32,15 +26,6 @@ const getInitialApiKey = () => {
   }
 };
 
-const getInitialClientId = () => {
-    try {
-        // @ts-ignore
-        const envId = import.meta.env?.VITE_GOOGLE_CLIENT_ID;
-        if (envId) return envId;
-    } catch {}
-    return DEFAULT_OAUTH_CLIENT_ID;
-};
-
 interface Toast {
   id: number;
   message: string;
@@ -49,7 +34,6 @@ interface Toast {
 
 const App: React.FC = () => {
   const [apiKey, setApiKey] = useState<string>(getInitialApiKey());
-  const [oauthClientId, setOauthClientId] = useState<string>(getInitialClientId());
   
   const [channels, setChannels] = useState<Channel[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
@@ -60,14 +44,8 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   
   // Navigation State
-  const [currentView, setCurrentView] = useState<'DASHBOARD' | 'MY_ANALYTICS'>('DASHBOARD');
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
-
-  // My Analytics State
-  const [analyticsData, setAnalyticsData] = useState<AnalyticsDataPoint[]>([]);
-  const [accessToken, setAccessToken] = useState<string | null>(null);
-  const [isAnalyticsLoading, setIsAnalyticsLoading] = useState(false);
   
   // UI State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -81,68 +59,12 @@ const App: React.FC = () => {
     }, 3000);
   }, []);
 
-  // --- Google OAuth Init ---
-  useEffect(() => {
-    // @ts-ignore
-    if (window.google && oauthClientId && !oauthClientId.includes('YOUR_CLIENT_ID')) {
-        // @ts-ignore
-        window.google.accounts.oauth2.initTokenClient({
-            client_id: oauthClientId,
-            scope: 'https://www.googleapis.com/auth/yt-analytics.readonly https://www.googleapis.com/auth/youtube.readonly',
-            callback: (response: any) => {
-                if (response.access_token) {
-                    setAccessToken(response.access_token);
-                    loadMyAnalytics(response.access_token);
-                } else {
-                    showToast("로그인 실패", 'error');
-                }
-            },
-        });
-    }
-  }, [showToast, oauthClientId]);
-
-  const handleLogin = () => {
-    if (!oauthClientId || oauthClientId.includes('YOUR_CLIENT_ID')) {
-        showToast("설정에서 OAuth Client ID를 입력해주세요.", 'error');
-        setIsSettingsOpen(true); // Open settings automatically if missing
-        return;
-    }
-    // @ts-ignore
-    const client = window.google?.accounts?.oauth2?.initTokenClient({
-        client_id: oauthClientId,
-        scope: 'https://www.googleapis.com/auth/yt-analytics.readonly https://www.googleapis.com/auth/youtube.readonly',
-        callback: (response: any) => {
-            if (response.access_token) {
-                setAccessToken(response.access_token);
-                loadMyAnalytics(response.access_token);
-                setCurrentView('MY_ANALYTICS');
-            }
-        },
-    });
-    client?.requestAccessToken();
-  };
-
-  const loadMyAnalytics = async (token: string) => {
-      setIsAnalyticsLoading(true);
-      try {
-          const data = await fetchAnalyticsReport(token, period);
-          setAnalyticsData(data);
-          showToast("내 채널 분석 데이터를 불러왔습니다.", 'success');
-      } catch (e: any) {
-          console.error(e);
-          showToast(e.message, 'error');
-      } finally {
-          setIsAnalyticsLoading(false);
-      }
-  };
-
-  // 1. 초기화 Logic (기존 유지)
+  // 1. 초기화 Logic
   useEffect(() => {
     const savedState = localStorage.getItem(STORAGE_KEY);
     const savedVideos = localStorage.getItem(VIDEO_CACHE_KEY);
 
     let initialApiKey = getInitialApiKey();
-    let initialClientId = getInitialClientId();
     let initialChannels: Channel[] = [];
     let initialFolders: Folder[] = [];
     let initialPeriod: AnalysisPeriod = 30;
@@ -151,7 +73,6 @@ const App: React.FC = () => {
     if (savedState) {
       const parsed = JSON.parse(savedState);
       initialApiKey = CONST_API_KEY || parsed.apiKey || initialApiKey;
-      initialClientId = parsed.oauthClientId || initialClientId;
       initialChannels = parsed.channels || [];
       initialFolders = parsed.folders || [];
       initialPeriod = parsed.period || 30;
@@ -196,7 +117,6 @@ const App: React.FC = () => {
     }
 
     setApiKey(initialApiKey);
-    setOauthClientId(initialClientId);
     setChannels(initialChannels);
     setFolders(initialFolders);
     setPeriod(initialPeriod);
@@ -214,8 +134,8 @@ const App: React.FC = () => {
   }, [showToast]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ apiKey, oauthClientId, channels, folders, period }));
-  }, [apiKey, oauthClientId, channels, folders, period]);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ apiKey, channels, folders, period }));
+  }, [apiKey, channels, folders, period]);
 
   const getShareLink = useCallback(() => {
      try {
@@ -265,14 +185,12 @@ const App: React.FC = () => {
   }, [apiKey, channels, period, lastFetched, showToast]);
 
   useEffect(() => {
-    if (currentView === 'DASHBOARD' && apiKey && channels.length > 0) {
+    if (apiKey && channels.length > 0) {
       if (dataPeriod !== period || !lastFetched) {
         refreshData(period);
       }
-    } else if (currentView === 'MY_ANALYTICS' && accessToken) {
-        loadMyAnalytics(accessToken);
     }
-  }, [apiKey, channels, period, dataPeriod, lastFetched, refreshData, currentView, accessToken]);
+  }, [apiKey, channels, period, dataPeriod, lastFetched, refreshData]);
 
   const addFolder = (name: string) => {
     setFolders([...folders, { id: `f-${Date.now()}`, name }]);
@@ -325,60 +243,24 @@ const App: React.FC = () => {
         apiKey={apiKey} setApiKey={setApiKey}
         folders={folders} channels={channels}
         selectedFolderId={selectedFolderId}
-        setSelectedFolderId={(id) => { setSelectedFolderId(id); setSelectedChannelId(null); setCurrentView('DASHBOARD'); }}
+        setSelectedFolderId={(id) => { setSelectedFolderId(id); setSelectedChannelId(null); }}
         selectedChannelId={selectedChannelId}
-        setSelectedChannelId={(id) => { setSelectedChannelId(id); if(id) setCurrentView('DASHBOARD'); }}
+        setSelectedChannelId={(id) => { setSelectedChannelId(id); }}
         addFolder={addFolder} addChannel={addChannel}
         deleteChannel={deleteChannel} moveChannel={moveChannel}
         refreshData={() => refreshData(undefined, true)}
         getShareLink={getShareLink}
         showToast={showToast}
-        onLoginClick={handleLogin}
-        currentView={currentView}
-        setCurrentView={setCurrentView}
       />
       <main className="flex-1 ml-80 overflow-y-auto">
-        {currentView === 'DASHBOARD' ? (
-            <Dashboard 
-                videos={videos} channels={channels}
-                selectedFolderId={selectedFolderId}
-                selectedChannelId={selectedChannelId}
-                folders={folders} isLoading={isLoading}
-                period={period} setPeriod={setPeriod}
-                apiKey={apiKey} setApiKey={setApiKey}
-            />
-        ) : (
-            <div className="relative h-full">
-                {isAnalyticsLoading && (
-                    <div className="absolute inset-0 bg-white/50 z-10 flex items-center justify-center backdrop-blur-sm">
-                        <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
-                    </div>
-                )}
-                {!accessToken ? (
-                    <div className="flex flex-col items-center justify-center h-full gap-4">
-                         <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center">
-                            <CheckCircle2 size={32} />
-                        </div>
-                        <h2 className="text-xl font-bold">내 채널 분석을 위해 로그인이 필요합니다</h2>
-                        <button 
-                            onClick={handleLogin}
-                            className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors shadow-lg"
-                        >
-                            구글 계정으로 로그인
-                        </button>
-                        <p className="text-sm text-slate-400 max-w-sm text-center">
-                            * 수익, 구독자 증감 등 민감한 데이터는<br/>본인 인증 후에만 볼 수 있습니다.
-                        </p>
-                        <div className="mt-8 p-4 bg-slate-100 rounded-lg text-xs text-slate-500 max-w-sm text-center">
-                            로그인이 안 되나요?<br/>
-                            우측 하단 <Settings size={12} className="inline"/> 아이콘을 눌러 <strong>OAuth Client ID</strong>를 입력하세요.
-                        </div>
-                    </div>
-                ) : (
-                    <MyAnalyticsDashboard data={analyticsData} period={period} />
-                )}
-            </div>
-        )}
+        <Dashboard 
+            videos={videos} channels={channels}
+            selectedFolderId={selectedFolderId}
+            selectedChannelId={selectedChannelId}
+            folders={folders} isLoading={isLoading}
+            period={period} setPeriod={setPeriod}
+            apiKey={apiKey} setApiKey={setApiKey}
+        />
       </main>
       
       {/* Global Settings UI */}
@@ -392,23 +274,12 @@ const App: React.FC = () => {
                   
                   <div className="space-y-3">
                       <div>
-                          <label className="text-[10px] font-bold text-slate-500 mb-1 block">YouTube Data API Key (Public)</label>
+                          <label className="text-[10px] font-bold text-slate-500 mb-1 block">YouTube Data API Key</label>
                           <input 
                               type="password" 
                               value={apiKey} 
                               onChange={(e) => setApiKey(e.target.value)}
                               placeholder="AIza..."
-                              className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none"
-                          />
-                      </div>
-                      
-                      <div>
-                          <label className="text-[10px] font-bold text-slate-500 mb-1 block">OAuth 2.0 Client ID (Private)</label>
-                          <input 
-                              type="text" 
-                              value={oauthClientId || ''} 
-                              onChange={(e) => setOauthClientId(e.target.value)}
-                              placeholder="...apps.googleusercontent.com"
                               className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-600 outline-none"
                           />
                       </div>

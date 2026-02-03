@@ -1,8 +1,7 @@
 
-import { Channel, Video, AnalyticsDataPoint } from '../types';
+import { Channel, Video } from '../types';
 
 const BASE_URL = 'https://www.googleapis.com/youtube/v3';
-const ANALYTICS_BASE_URL = 'https://youtubeanalytics.googleapis.com/v2';
 
 const parseDuration = (duration: string): number => {
   const match = duration.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
@@ -31,7 +30,7 @@ const handleApiError = async (response: Response) => {
   }
 };
 
-// --- 기존 Data API (Public) ---
+// --- Data API (Public) ---
 
 export const fetchChannelInfo = async (identifier: string, apiKey: string): Promise<Omit<Channel, 'folderId'>> => {
   const cleanId = identifier.trim();
@@ -109,26 +108,49 @@ export const fetchRecentVideos = async (channels: Channel[], apiKey: string, day
   const videoToChannelMap: Record<string, { channelId: string, channelTitle: string }> = {};
   const allVideoIds: string[] = [];
 
-  // PlaylistItems API는 채널당 1유닛 소모
+  // PlaylistItems API
   const playlistPromises = channels.map(async (channel) => {
-    try {
-      const maxResults = days > 7 ? 50 : 20;
-      const url = `${BASE_URL}/playlistItems?part=snippet,contentDetails&playlistId=${channel.uploadsPlaylistId}&maxResults=${maxResults}&key=${apiKey}`;
-      const res = await fetch(url);
-      if (!res.ok) return;
-      const data = await res.json();
-      if (!data.items) return;
+    let nextPageToken: string | undefined = undefined;
+    let shouldContinue = true;
 
-      for (const item of data.items) {
-        const publishedAt = new Date(item.snippet.publishedAt);
-        if (publishedAt >= cutoffDate) {
-          const vId = item.contentDetails.videoId;
-          allVideoIds.push(vId);
-          videoToChannelMap[vId] = { channelId: channel.id, channelTitle: channel.title };
+    // [중요] 페이지네이션 루프: 기간 내의 모든 영상을 가져오기 위함
+    while (shouldContinue) {
+        try {
+            const maxResults = 50; // Max allowed by API per page
+            let url = `${BASE_URL}/playlistItems?part=snippet,contentDetails&playlistId=${channel.uploadsPlaylistId}&maxResults=${maxResults}&key=${apiKey}`;
+            if (nextPageToken) {
+                url += `&pageToken=${nextPageToken}`;
+            }
+
+            const res = await fetch(url);
+            if (!res.ok) break; // Fail silently for individual channel errors to keep others working
+            const data = await res.json();
+            
+            if (!data.items || data.items.length === 0) break;
+
+            for (const item of data.items) {
+                const publishedAt = new Date(item.snippet.publishedAt);
+                // 날짜 비교: cutoffDate보다 최신이면 추가
+                if (publishedAt >= cutoffDate) {
+                    const vId = item.contentDetails.videoId;
+                    allVideoIds.push(vId);
+                    videoToChannelMap[vId] = { channelId: channel.id, channelTitle: channel.title };
+                } else {
+                    // [최적화] API는 시간 역순으로 오므로, cutoffDate보다 오래된 영상이 나오면 루프 종료
+                    shouldContinue = false;
+                }
+            }
+
+            // 다음 페이지가 있고, 아직 날짜 범위 내에 있다면 계속 진행
+            nextPageToken = data.nextPageToken;
+            if (!nextPageToken || !shouldContinue) {
+                break;
+            }
+
+        } catch (e) {
+            console.warn(`Failed for ${channel.title}`, e);
+            break;
         }
-      }
-    } catch (e) {
-      console.warn(`Failed for ${channel.title}`, e);
     }
   });
 
@@ -141,7 +163,7 @@ export const fetchRecentVideos = async (channels: Channel[], apiKey: string, day
   for (let i = 0; i < allVideoIds.length; i += chunkSize) {
     const chunk = allVideoIds.slice(i, i + chunkSize);
     try {
-      // Videos API 상세 조회는 50개 묶음당 1유닛 소모
+      // Videos API 상세 조회 (50개씩)
       const url = `${BASE_URL}/videos?part=snippet,statistics,contentDetails&id=${chunk.join(',')}&key=${apiKey}`;
       const res = await fetch(url);
       await handleApiError(res);
@@ -162,7 +184,7 @@ export const fetchRecentVideos = async (channels: Channel[], apiKey: string, day
             likeCount: parseInt(item.statistics.likeCount || '0'),
             commentCount: parseInt(item.statistics.commentCount || '0'),
             duration: item.contentDetails.duration,
-            isShort: durationSec <= 180,
+            isShort: durationSec <= 180, // 3분(180초) 이하를 숏츠로 간주
           });
         });
       }
@@ -172,46 +194,4 @@ export const fetchRecentVideos = async (channels: Channel[], apiKey: string, day
   }
 
   return finalVideos;
-};
-
-// --- Analytics API (Private / OAuth Required) ---
-
-export const fetchAnalyticsReport = async (accessToken: string, days: number = 30): Promise<AnalyticsDataPoint[]> => {
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setDate(endDate.getDate() - days);
-
-    const formatDate = (date: Date) => date.toISOString().split('T')[0];
-
-    // metrics: views, estimatedMinutesWatched, averageViewDuration, subscribersGained, estimatedRevenue
-    // dimensions: day
-    // sort: day
-    const metrics = 'views,estimatedMinutesWatched,averageViewDuration,subscribersGained,estimatedRevenue';
-    const url = `${ANALYTICS_BASE_URL}/reports?ids=channel==MINE&startDate=${formatDate(startDate)}&endDate=${formatDate(endDate)}&metrics=${metrics}&dimensions=day&sort=day`;
-
-    const res = await fetch(url, {
-        headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Accept': 'application/json'
-        }
-    });
-
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error?.message || "Analytics API Error");
-    }
-
-    const data = await res.json();
-    
-    // Response format: { columnHeaders: [...], rows: [[...], [...]] }
-    if (!data.rows) return [];
-
-    return data.rows.map((row: any[]) => ({
-        date: row[0],
-        views: row[1],
-        estimatedMinutesWatched: row[2],
-        averageViewDuration: row[3],
-        subscribersGained: row[4],
-        estimatedRevenue: row[5]
-    }));
 };
