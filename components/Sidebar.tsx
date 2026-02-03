@@ -62,33 +62,14 @@ const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const handleShareConfig = () => {
-    // [수정] 주소창을 그냥 복사하는 것이 아니라, 현재 상태 데이터를 기반으로 확실한 URL을 생성합니다.
-    try {
-        const shareData: any = { channels, folders };
-        // API 키가 하드코딩 되어있지 않은 경우에만 URL에 포함 (보안)
-        // 여기서는 App.tsx 로직을 따르되, 공유 버튼이므로 API키가 없으면 포함하는게 맞을수도 있으나
-        // 보통은 channels와 folders만 공유하면 충분합니다.
-        
-        const jsonStr = JSON.stringify(shareData);
-        // UTF-8 Base64 Encoding
-        const b64 = window.btoa(unescape(encodeURIComponent(jsonStr)));
-        // URL Safe Encoding (+ 기호 등을 %2B로 변환)
-        const urlSafeB64 = encodeURIComponent(b64);
-        
-        const origin = window.location.origin;
-        const pathname = window.location.pathname;
-        const shareUrl = `${origin}${pathname}?share=${urlSafeB64}`;
-
-        navigator.clipboard.writeText(shareUrl).then(() => {
-            alert("✅ 공유용 링크가 복사되었습니다!\n\n시크릿 모드나 다른 브라우저에서도 동일한 화면을 볼 수 있습니다.");
-        }).catch(err => {
-            console.error('Clipboard failed', err);
-            prompt("아래 링크를 복사하세요:", shareUrl);
-        });
-    } catch (e) {
-        alert("링크 생성 중 오류가 발생했습니다.");
-        console.error(e);
-    }
+    // App.tsx에서 이미 URL을 압축하여 최적화하고 있으므로, 현재 주소를 그대로 복사합니다.
+    const shareUrl = window.location.href;
+    navigator.clipboard.writeText(shareUrl).then(() => {
+        alert("✅ 공유용 짧은 링크가 복사되었습니다!");
+    }).catch(err => {
+        console.error('Clipboard failed', err);
+        prompt("아래 링크를 복사하세요:", shareUrl);
+    });
   };
 
   const handleDragStart = (e: React.DragEvent, channelId: string) => {
@@ -107,6 +88,9 @@ const Sidebar: React.FC<SidebarProps> = ({
     const channelId = e.dataTransfer.getData('channelId');
     if (channelId) moveChannel(channelId, targetFolderId);
   };
+
+  // 썸네일이 없을 경우 보여줄 기본 이미지
+  const DEFAULT_THUMBNAIL = "https://www.gstatic.com/youtube/img/branding/favicon/favicon_144x144.png";
 
   return (
     <div className="w-80 bg-white border-r border-slate-200 h-screen flex flex-col fixed left-0 top-0 z-20 font-sans">
@@ -214,7 +198,11 @@ const Sidebar: React.FC<SidebarProps> = ({
                                             }`}
                                         >
                                             <GripVertical size={14} className="text-slate-300 opacity-0 group-hover:opacity-100" />
-                                            <img src={channel.thumbnail} alt={channel.title} className="w-6 h-6 rounded-full bg-slate-200" />
+                                            <img 
+                                                src={channel.thumbnail || DEFAULT_THUMBNAIL} 
+                                                alt={channel.title} 
+                                                className="w-6 h-6 rounded-full bg-slate-200 object-cover" 
+                                            />
                                             <p className={`text-xs font-semibold truncate flex-1 ${selectedChannelId === channel.id ? 'text-blue-800' : 'text-slate-800'}`}>{channel.title}</p>
                                             <button onClick={(e) => { e.stopPropagation(); deleteChannel(channel.id); }} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100">
                                                 <Trash2 size={14} />

@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import { Channel, Folder, Video, AnalysisPeriod } from './types';
 import { fetchChannelInfo, fetchRecentVideos } from './services/youtubeService';
+import LZString from 'lz-string';
 
 const STORAGE_KEY = 'yt_dashboard_state';
 const VIDEO_CACHE_KEY = 'yt_dashboard_videos';
@@ -60,13 +61,42 @@ const App: React.FC = () => {
     const shareData = params.get('share');
     if (shareData) {
       try {
-        // [수정] URL 안전 문자로 인코딩된 데이터를 다시 디코딩 후 파싱
-        // params.get()이 이미 1차 디코딩을 수행하지만, Base64 과정의 UTF-8 처리를 위해 표준 로직 사용
-        const jsonStr = decodeURIComponent(escape(window.atob(shareData)));
-        const data = JSON.parse(jsonStr);
-        if (data.apiKey && !CONST_API_KEY) initialApiKey = data.apiKey;
-        if (data.channels) initialChannels = data.channels;
-        if (data.folders) initialFolders = data.folders;
+        // 1. LZString 압축 해제 시도 (신규 방식)
+        let jsonStr = LZString.decompressFromEncodedURIComponent(shareData);
+        
+        // 2. 실패 시 기존 Base64 방식 시도 (구버전 호환)
+        if (!jsonStr) {
+            try {
+                jsonStr = decodeURIComponent(escape(window.atob(shareData)));
+            } catch (e) { /* ignore */ }
+        }
+
+        if (jsonStr) {
+            const data = JSON.parse(jsonStr);
+            
+            // 데이터 포맷 확인 (압축된 최소화 포맷인지, 일반 JSON인지)
+            // 최소화 포맷: { k: key, f: [[id,name]...], c: [[id,fid,title]...] }
+            if (data.c && Array.isArray(data.c)) {
+                if (data.k && !CONST_API_KEY) initialApiKey = data.k;
+                if (data.f) {
+                    initialFolders = data.f.map((f: any[]) => ({ id: f[0], name: f[1] }));
+                }
+                initialChannels = data.c.map((c: any[]) => ({
+                    id: c[0],
+                    folderId: c[1],
+                    title: c[2],
+                    // 썸네일과 플레이리스트ID는 공유 시 제거되므로 복구
+                    thumbnail: '', 
+                    uploadsPlaylistId: c[0].replace(/^UC/, 'UU'),
+                    handle: ''
+                }));
+            } else {
+                // 기존 포맷
+                if (data.apiKey && !CONST_API_KEY) initialApiKey = data.apiKey;
+                if (data.channels) initialChannels = data.channels;
+                if (data.folders) initialFolders = data.folders;
+            }
+        }
       } catch (e) {
         console.error("Failed to parse shared data", e);
       }
@@ -93,23 +123,26 @@ const App: React.FC = () => {
     // URL 업데이트 (주소창 복사 지원을 위해)
     if (channels.length > 0) {
         try {
-            const shareData: any = { channels, folders };
+            // 데이터 최소화 (Minification)
+            // { k: key, f: [[id,name]], c: [[id,folderId,title]] }
+            const minifiedData: any = {
+                f: folders.map(f => [f.id, f.name]),
+                c: channels.map(c => [c.id, c.folderId, c.title])
+            };
+            
             if (!CONST_API_KEY && apiKey) {
-                shareData.apiKey = apiKey;
+                minifiedData.k = apiKey;
             }
 
-            const jsonStr = JSON.stringify(shareData);
-            // UTF-8 지원 Base64 인코딩
-            const b64 = window.btoa(unescape(encodeURIComponent(jsonStr)));
+            const jsonStr = JSON.stringify(minifiedData);
+            // LZString 압축
+            const compressed = LZString.compressToEncodedURIComponent(jsonStr);
             
-            // [중요] URL에 넣을 때 +, /, = 문자가 깨지지 않도록 한 번 더 인코딩
-            // URLSearchParams를 쓰지 않고 직접 문자열을 만들 때는 encodeURIComponent가 필수입니다.
-            const urlSafeB64 = encodeURIComponent(b64);
-            const newUrl = `${window.location.pathname}?share=${urlSafeB64}`;
+            const newUrl = `${window.location.pathname}?share=${compressed}`;
             
             // 현재 주소와 다를 때만 업데이트
-            // location.search는 디코딩된 값을 보여줄 수 있으므로 원본 문자열 비교가 안전
-            if (!window.location.search.includes(urlSafeB64)) {
+            const currentShare = new URLSearchParams(window.location.search).get('share');
+            if (currentShare !== compressed) {
                 window.history.replaceState({}, '', newUrl);
             }
         } catch (e) {
