@@ -46,26 +46,25 @@ const App: React.FC = () => {
     let initialFolders: Folder[] = [];
     let initialPeriod: AnalysisPeriod = 30;
 
+    // 로컬 스토리지 로드
     if (savedState) {
       const parsed = JSON.parse(savedState);
-      // 코드가 우선순위가 가장 높고, 없으면 저장된 값을 사용
       initialApiKey = CONST_API_KEY || parsed.apiKey || initialApiKey;
       initialChannels = parsed.channels || [];
       initialFolders = parsed.folders || [];
       initialPeriod = parsed.period || 30;
     }
 
+    // URL 파라미터(공유 데이터) 로드 - URL이 스토리지보다 우선순위 높음
     const params = new URLSearchParams(window.location.search);
     const shareData = params.get('share');
     if (shareData) {
       try {
         const jsonStr = decodeURIComponent(escape(window.atob(shareData)));
         const data = JSON.parse(jsonStr);
-        // 공유된 정보가 있으면 적용 (단, 코드가 있으면 코드가 우선)
         if (data.apiKey && !CONST_API_KEY) initialApiKey = data.apiKey;
         if (data.channels) initialChannels = data.channels;
         if (data.folders) initialFolders = data.folders;
-        window.history.replaceState({}, document.title, window.location.pathname);
       } catch (e) {
         console.error("Failed to parse shared data", e);
       }
@@ -84,9 +83,32 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // 설정값 저장
+  // 2. 상태 변경 시 URL 및 로컬 스토리지 동기화
   useEffect(() => {
+    // 로컬 스토리지 저장
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ apiKey, channels, folders, period }));
+
+    // URL 업데이트 (주소창 복사 지원을 위해)
+    if (channels.length > 0) {
+        try {
+            // API 키가 코드에 하드코딩 되어 있다면 URL에는 포함시키지 않음 (보안 및 길이 최적화)
+            const shareData: any = { channels, folders };
+            if (!CONST_API_KEY && apiKey) {
+                shareData.apiKey = apiKey;
+            }
+
+            const jsonStr = JSON.stringify(shareData);
+            const b64 = window.btoa(unescape(encodeURIComponent(jsonStr)));
+            const newUrl = `${window.location.pathname}?share=${b64}`;
+            
+            // 현재 상태와 URL이 다를 때만 업데이트
+            if (window.location.search !== `?share=${b64}`) {
+                window.history.replaceState({}, '', newUrl);
+            }
+        } catch (e) {
+            console.error("URL update failed", e);
+        }
+    }
   }, [apiKey, channels, folders, period]);
 
   // 영상 데이터 캐시 저장

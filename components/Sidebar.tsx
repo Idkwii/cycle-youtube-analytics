@@ -62,17 +62,10 @@ const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const handleShareConfig = () => {
-    try {
-        const data = { apiKey, channels, folders };
-        const jsonStr = JSON.stringify(data);
-        const b64 = window.btoa(unescape(encodeURIComponent(jsonStr)));
-        const url = `${window.location.origin}${window.location.pathname}?share=${b64}`;
-        navigator.clipboard.writeText(url).then(() => {
-            alert("✅ 팀원 공유용 링크가 복사되었습니다!\n\n이 링크로 접속하면 API 키 입력 없이 즉시 데이터를 볼 수 있습니다.");
-        });
-    } catch (e) {
-        alert("링크 생성 중 오류가 발생했습니다.");
-    }
+    // 이제 URL이 자동으로 상태를 반영하므로, 현재 주소를 그대로 복사하면 됩니다.
+    navigator.clipboard.writeText(window.location.href).then(() => {
+        alert("✅ 현재 대시보드 링크가 복사되었습니다!\n\n이 링크를 공유하면 추가된 채널 정보를 다른 사람도 그대로 볼 수 있습니다.");
+    });
   };
 
   const handleDragStart = (e: React.DragEvent, channelId: string) => {
